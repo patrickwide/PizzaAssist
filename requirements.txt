@@ -1,0 +1,10 @@
+langchain 
+langchain-ollama 
+langchain-chroma 
+langchain-community
+pandas 
+ollama 
+chromadb 
+python-dotenv 
+pdf2image
+nest_asyncio
