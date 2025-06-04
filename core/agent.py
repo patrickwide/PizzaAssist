@@ -16,7 +16,7 @@ from memory import AgentMemory
 
 def format_tool_response(response_str: str) -> str:
     """Format tool response for better readability in logs."""
-    print(f"--- Agent --- Raw Tool Response: {response_str}")
+    print(f"--- Agent --- Raw Tool Response: {response_str}") # Log the raw response for debugging
     try:
         # Try to parse as JSON for pretty printing
         data = json.loads(response_str)

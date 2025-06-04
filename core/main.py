@@ -6,14 +6,16 @@ import asyncio
 import nest_asyncio
 
 # --- Application Config & Constants ---
-from config import (
+from constants import (
     CSV_FILE_PATH,
     ORDER_FILE_PATH,
     CONVERSATION_HISTORY_FILE_PATH,
     OLLAMA_MODEL,
     ENABLE_MEMORY,
-    TOOL_DEFINITIONS
+    STORE_METADATA_FILE,
 )
+
+from config import TOOL_DEFINITIONS, AVAILABLE_FUNCTIONS
 
 # --- Core Application Modules ---
 from vector_store import setup_vector_store

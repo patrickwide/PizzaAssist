@@ -1,8 +1,8 @@
 # --- Directory Structure ---
 DATA_DIR = "data"  # Base data directory
-DB_DIR = "core/data/db"  # Database files 
-HISTORY_DIR = "core/data/history"  # History and conversation files
-REVIEWS_DIR = "core/data/reviews"  # Reviews and orders
+DB_DIR = f"{DATA_DIR}/db"  # Database files
+HISTORY_DIR = f"{DATA_DIR}/history"  # History and conversation files
+REVIEWS_DIR = f"{DATA_DIR}/reviews"  # Reviews and orders
 
 # --- Path Configuration ---
 DB_LOCATION = DB_DIR  # Directory for Chroma DB
@@ -18,4 +18,4 @@ VISION_MODEL = "llama3.2-vision"  # Dedicated vision model
 
 # --- Application Configuration ---
 COLLECTION_NAME = "restaurant_reviews"  # Collection name for Chroma DB
-ENEBLE_MEMORY = True  # Set to False to disable memory
+ENABLE_MEMORY = True  # Set to False to disable memory
