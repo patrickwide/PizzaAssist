@@ -61,6 +61,11 @@ def load_store_metadata(db_location: str) -> dict:
             return {}
     return {}
 
+def initialize_directories():
+    """Create necessary directories if they don't exist."""
+    for directory in [DB_LOCATION, os.path.dirname(CONVERSATION_HISTORY_FILE_PATH)]:
+        os.makedirs(directory, exist_ok=True)
+
 # --- Vector Store Setup ---
 def setup_vector_store(
     file_paths: List[str],
@@ -94,6 +99,9 @@ def setup_vector_store(
     Returns:
         The initialized retriever object or None if setup fails
     """
+    # Initialize required directories
+    initialize_directories()
+
     # Check if we need to recreate the store
     current_files_hash = get_files_hash(file_paths)
     stored_metadata = load_store_metadata(db_location)
