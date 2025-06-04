@@ -45,14 +45,14 @@ def save_store_metadata(db_location: str, files_hash: str):
         "last_updated": datetime.now().isoformat(),
         "embedding_model": EMBEDDING_MODEL
     }
-    metadata_path = os.path.join(db_location, STORE_METADATA_FILE)
+    metadata_path = STORE_METADATA_FILE
     os.makedirs(db_location, exist_ok=True)
     with open(metadata_path, "w") as f:
         json.dump(metadata, f)
 
 def load_store_metadata(db_location: str) -> dict:
     """Load metadata about the current state of the vector store."""
-    metadata_path = os.path.join(db_location, STORE_METADATA_FILE)
+    metadata_path = STORE_METADATA_FILE
     if os.path.exists(metadata_path):
         try:
             with open(metadata_path, "r") as f:

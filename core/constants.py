@@ -1,5 +1,5 @@
 # --- Directory Structure ---
-DATA_DIR = "data"  # Base data directory
+DATA_DIR = "core/data"  # Base data directory
 DB_DIR = f"{DATA_DIR}/db"  # Database files
 HISTORY_DIR = f"{DATA_DIR}/history"  # History and conversation files
 REVIEWS_DIR = f"{DATA_DIR}/reviews"  # Reviews and orders
