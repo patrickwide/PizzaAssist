@@ -11,7 +11,7 @@ from config import (
     ORDER_FILE_PATH,
     CONVERSATION_HISTORY_FILE_PATH,
     OLLAMA_MODEL,
-    ENEBLE_MEMORY,
+    ENABLE_MEMORY,
     TOOL_DEFINITIONS
 )
 
@@ -49,7 +49,7 @@ async def main():
     
     # Set up the vector store without including the conversation history file in file_paths.
     # The conversation history file will be automatically collected via the default parameter.
-    query_documents_retriever = setup_vector_store(file_paths=[CSV_FILE_PATH, ORDER_FILE_PATH], enable_memory=ENEBLE_MEMORY)
+    query_documents_retriever = setup_vector_store(file_paths=[CSV_FILE_PATH, ORDER_FILE_PATH], enable_memory=ENABLE_MEMORY)
 
     if query_documents_retriever is None:
         print("Warning: Failed to initialize retriever. Review search functionality will be unavailable.")
