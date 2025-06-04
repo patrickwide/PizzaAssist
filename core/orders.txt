@@ -1,3 +1,0 @@
-2025-06-01|1 Large Pepperoni Pizza|123 Main St|Delivered
-2025-06-02|2 Medium Veggie Pizza|456 Oak Ave|Pending
-2025-06-03|1 Small Margherita Pizza, 1 Large Hawaiian|789 Pine Rd|Processing

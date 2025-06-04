@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Application Data
+data/db/*
+data/history/*
+!data/history/.gitkeep
+data/reviews/*
+!data/reviews/.gitkeep
+
+# Keep directory structure but ignore contents
+!data/
+!data/*/
+!data/*/.gitkeep
+
+# Specific files to ignore
+*.sqlite3
+*.tmp
+*.log
