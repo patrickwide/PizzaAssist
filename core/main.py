@@ -18,16 +18,15 @@ from constants import (
 from config import TOOL_DEFINITIONS, AVAILABLE_FUNCTIONS
 
 # --- Core Application Modules ---
+from tools.query_documents import query_documents  # Updated import
 from vector_store import setup_vector_store
 from memory import AgentMemory
 from agent import run_agent
-from langchain_core.vectorstores import VectorStoreRetriever # Explicit import
+from langchain_core.vectorstores import VectorStoreRetriever
 from typing import Optional
 
 # Global variable for the retriever (or pass it around)
 retriever: Optional[VectorStoreRetriever] = None
-
-from tools.query_documents import retriever as query_documents_retriever
 
 def print_tool_definitions():
     """Print all available tool definitions"""
@@ -50,18 +49,37 @@ def print_tool_definitions():
 
 # --- Main Execution Block ---
 async def main():    
-    # Print tool definitions before starting
-    print_tool_definitions()
-    
-    # Set up the vector store without including the conversation history file in file_paths.
-    # The conversation history file will be automatically collected via the default parameter.
-    setup_vector_store(file_paths=[CSV_FILE_PATH, ORDER_FILE_PATH], enable_memory=ENABLE_MEMORY)
+    try:
+        # Print available tool definitions
+        print_tool_definitions()
 
-    if retriever is None:
-        print("Warning: Failed to initialize retriever. Review search functionality will be unavailable.")
-        # Proceeding without retriever functionality
+        # Initialize memory
+        memory = AgentMemory(
+            max_history=15,
+            history_file=CONVERSATION_HISTORY_FILE_PATH
+        )
 
-    memory = AgentMemory(max_history=15, history_file=CONVERSATION_HISTORY_FILE_PATH)  # Increased history slightly
+        # Initialize vector store and retriever
+        print("Initializing vector store...")
+        retriever = setup_vector_store(
+            file_paths=[CSV_FILE_PATH, ORDER_FILE_PATH],
+            enable_memory=ENABLE_MEMORY
+        )
+
+        # If retriever is initialized correctly
+        if retriever is not None:
+            print(
+                f"\n✅ Retriever successfully initialized!"
+                f"\n   • Tags         : {getattr(retriever, 'tags', 'N/A')}"
+                f"\n   • Vector Store : {type(getattr(retriever, 'vectorstore', 'N/A')).__name__}"
+                f"\n   • Search Params: {getattr(retriever, 'search_kwargs', 'N/A')}\n"
+            )
+        else:
+            print("\n❌ Retriever initialization failed. Please check logs for details.\n")
+
+    except Exception as e:
+        retriever = None
+        print(f"❌ Error during setup: {e}")
 
     print("\nWelcome to the Pizza Restaurant Assistant!")
     print("Ask about reviews or place an order.")
@@ -92,3 +110,25 @@ if __name__ == "__main__":
     # Replace asyncio.run(main()) with the following:
     nest_asyncio.apply()
     asyncio.run(main()) # or loop.run_until_complete(main())
+
+# # Test the function directly
+# if __name__ == "__main__":
+#     if not os.path.exists(CSV_FILE_PATH):
+#          print(f"Warning: {CSV_FILE_PATH} not found. A dummy file will be created on first run.")
+    
+#     # Initialize vector store and retriever for testing
+#     print("Initializing vector store for test...")
+#     test_retriever = setup_vector_store(
+#         file_paths=[CSV_FILE_PATH, ORDER_FILE_PATH],
+#         enable_memory=ENABLE_MEMORY
+#     )
+    
+#     if test_retriever:
+#         test_query = "What are the reviews for pepperoni pizza?"
+#         print("Testing query_documents with query:", test_query)
+#         result = query_documents(test_query, retriever_override=test_retriever)
+#         print("Query result:", result)
+#     else:
+#         print("Failed to initialize retriever for testing")
+
+
