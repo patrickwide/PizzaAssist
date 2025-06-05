@@ -33,7 +33,7 @@ async def run_agent(model: str, user_input: str, memory: AgentMemory):
             messages=messages,
             tools=tools,
         )
-        print("--- LLM Raw Response:", json.dumps(response, indent=2)) # DEBUG: See raw response
+        print("--- LLM Raw Response:", json.dumps(response.model_dump(), indent=2)) # DEBUG: See raw response
         # Check if response contains a message
         if not response or "message" not in response:
             print("--- Agent --- Error: No message in LLM response.")
