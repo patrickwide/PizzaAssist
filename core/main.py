@@ -6,7 +6,7 @@ import asyncio
 import nest_asyncio
 
 # --- Application Config & Constants ---
-from constants import (
+from core.constants import (
     CSV_FILE_PATH,
     ORDER_FILE_PATH,
     CONVERSATION_HISTORY_FILE_PATH,
@@ -15,14 +15,16 @@ from constants import (
     STORE_METADATA_FILE,
 )
 
-from config import TOOL_DEFINITIONS, AVAILABLE_FUNCTIONS
+# --- Load Tool Definitions ---
+from core.config import TOOL_DEFINITIONS, AVAILABLE_FUNCTIONS
 
 # --- Core Application Modules ---
-from tools.query_documents import query_documents, set_retriever
-from vector_store import setup_vector_store
-from memory import AgentMemory
-from agent import run_agent
-from utils import print_tool_definitions
+from core.tools.query_documents import query_documents, set_retriever
+from core.vector_store import setup_vector_store
+from core.memory import AgentMemory
+from core.agent import run_agent
+from core.utils import print_tool_definitions
+
 from langchain_core.vectorstores import VectorStoreRetriever
 from typing import Optional
 

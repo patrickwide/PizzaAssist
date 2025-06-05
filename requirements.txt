@@ -1,14 +1,26 @@
-langchain 
-langchain-ollama 
-langchain-chroma 
-langchain-community
-pandas 
-ollama 
-chromadb 
-python-dotenv 
-pdf2image
-nest_asyncio
-# 
+# Web framework
 fastapi
-uvicorn
+uvicorn[standard]
 python-multipart
+
+# LangChain core & extensions
+langchain
+langchain-core
+langchain-ollama
+langchain-chroma
+langchain-community
+
+# LLM backend
+ollama
+
+# Vector store
+chromadb
+
+# Data handling
+pandas
+pdf2image
+
+# Utilities
+websockets
+python-dotenv
+nest_asyncio

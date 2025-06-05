@@ -25,28 +25,31 @@ async def run_agent(model: str, user_input: str, memory: AgentMemory):
     tools = TOOL_DEFINITIONS
 
     print("\n--- Agent --- Sending request to LLM...")
-    # print("--- Sending Messages:", json.dumps(messages, indent=2)) # DEBUG: See messages sent
-    # print("--- Sending Tools:", json.dumps(tools, indent=2)) # DEBUG: See tools sent
+    print("--- Sending Messages:", json.dumps(messages, indent=2)) # DEBUG: See messages sent
+    print("--- Sending Tools:", json.dumps(tools, indent=2)) # DEBUG: See tools sent
     try:
         response = await client.chat(
             model=model,
             messages=messages,
             tools=tools,
         )
-        print("--- LLM Raw Response:", json.dumps(response, indent=2)) # DEBUG: See raw response
+
+        response_dict = response.model_dump() if hasattr(response, 'model_dump') else response
+        print("--- LLM Raw Response:", json.dumps(response_dict, indent=2))
+
         # Check if response contains a message
-        if not response or "message" not in response:
+        if not response_dict or "message" not in response_dict:
             print("--- Agent --- Error: No message in LLM response.")
             memory.add_message({"role": "system", "content": "No response from LLM."})
-            # return None
-            return            
+            return 
 
     except Exception as e:
         print(f"Error calling Ollama chat API: {e}")
         memory.add_message({"role": "system", "content": f"Error contacting LLM: {e}"})
         return
 
-    memory.add_message(response["message"])
+    message = response_dict["message"] if isinstance(response_dict, dict) else response["message"]
+    memory.add_message(message)
 
     if not response["message"].get("tool_calls"):
         print("\n--- Agent --- LLM Response (no tool call):")
