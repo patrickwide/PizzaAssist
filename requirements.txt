@@ -8,3 +8,7 @@ chromadb
 python-dotenv 
 pdf2image
 nest_asyncio
+# 
+fastapi
+uvicorn
+python-multipart

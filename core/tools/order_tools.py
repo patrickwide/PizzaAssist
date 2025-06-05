@@ -1,7 +1,7 @@
 from typing import Optional, List, Any, Dict
 from datetime import datetime
 import json
-from constants import ORDER_FILE_PATH
+from core.constants import ORDER_FILE_PATH
 
 def tool_place_order(
     pizza_type: str,

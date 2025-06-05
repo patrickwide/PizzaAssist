@@ -5,13 +5,13 @@ import json
 import ollama
 
 # --- Application Config & Constants ---
-from config import (
+from core.config import (
     TOOL_DEFINITIONS,
     AVAILABLE_FUNCTIONS,
 )
 
 # --- Core Application Modules ---
-from memory import AgentMemory
+from core.memory import AgentMemory
 
 
 # --- Agent Runner ---
@@ -33,7 +33,14 @@ async def run_agent(model: str, user_input: str, memory: AgentMemory):
             messages=messages,
             tools=tools,
         )
-        # print("--- LLM Raw Response:", json.dumps(response, indent=2)) # DEBUG: See raw response
+        print("--- LLM Raw Response:", json.dumps(response, indent=2)) # DEBUG: See raw response
+        # Check if response contains a message
+        if not response or "message" not in response:
+            print("--- Agent --- Error: No message in LLM response.")
+            memory.add_message({"role": "system", "content": "No response from LLM."})
+            # return None
+            return            
+
     except Exception as e:
         print(f"Error calling Ollama chat API: {e}")
         memory.add_message({"role": "system", "content": f"Error contacting LLM: {e}"})

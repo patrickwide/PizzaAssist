@@ -61,16 +61,3 @@ def get_tool_info() -> Dict[str, Any]:
             },
         },
     }
-
-
-# Test the function directly
-if __name__ == "__main__":
-    # Example usage
-    test_query = "What are the reviews for pepperoni pizza?"
-    print("Testing query_documents with query:", test_query)
-    result = query_documents(test_query)
-    print("Query result:", result)
-
-    # Example of tool info retrieval
-    tool_info = get_tool_info()
-    print("Tool info:", json.dumps(tool_info, indent=2))

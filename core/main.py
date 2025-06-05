@@ -22,30 +22,12 @@ from tools.query_documents import query_documents, set_retriever
 from vector_store import setup_vector_store
 from memory import AgentMemory
 from agent import run_agent
+from utils import print_tool_definitions
 from langchain_core.vectorstores import VectorStoreRetriever
 from typing import Optional
 
 # Global variable for the retriever (or pass it around)
 retriever: Optional[VectorStoreRetriever] = None
-
-def print_tool_definitions():
-    """Print all available tool definitions"""
-    print("\n=== Available Tool Definitions ===")
-    if not TOOL_DEFINITIONS:
-        print("No tool definitions available.")
-        return
-        
-    for tool in TOOL_DEFINITIONS:
-        if "function" in tool:
-            func = tool["function"]
-            print(f"\nTool: {func.get('name', 'Unnamed')}")
-            print(f"Description: {func.get('description', 'No description')}")
-            if 'parameters' in func:
-                print("Parameters:")
-                for param_name, param_details in func["parameters"].get("properties", {}).items():
-                    required = param_name in func["parameters"].get("required", [])
-                    print(f"  - {param_name}: {param_details.get('description', 'No description')} {'(Required)' if required else '(Optional)'}")
-    print("\n================================")
 
 # --- Main Execution Block ---
 async def main():    
