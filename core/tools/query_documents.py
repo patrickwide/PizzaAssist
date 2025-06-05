@@ -3,9 +3,6 @@ import json
 from langchain.schema import Document
 from langchain_core.vectorstores import VectorStoreRetriever
 
-# Global retriever reference - will be set from main.py
-retriever: Optional[VectorStoreRetriever] = None
-
 def query_documents(query: str, retriever_override: Optional[VectorStoreRetriever] = None) -> str:
     """
     Searches the indexed documents (reviews, orders, or any supported file) for content relevant to the user's query.
@@ -18,7 +15,7 @@ def query_documents(query: str, retriever_override: Optional[VectorStoreRetrieve
     Returns:
         A JSON string containing the retrieved documents or an error message.
     """
-    global retriever
+    global retriever 
     active_retriever = retriever_override if retriever_override is not None else retriever
     if active_retriever is None:
         return json.dumps({"error": "Document database could not be initialized. Cannot search documents."})
@@ -57,3 +54,16 @@ def get_tool_info() -> Dict[str, Any]:
             },
         },
     }
+
+
+# Test the function directly
+if __name__ == "__main__":
+    # Example usage
+    test_query = "What are the reviews for pepperoni pizza?"
+    print("Testing query_documents with query:", test_query)
+    result = query_documents(test_query)
+    print("Query result:", result)
+
+    # Example of tool info retrieval
+    tool_info = get_tool_info()
+    print("Tool info:", json.dumps(tool_info, indent=2))

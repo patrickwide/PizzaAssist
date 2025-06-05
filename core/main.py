@@ -21,6 +21,12 @@ from config import TOOL_DEFINITIONS, AVAILABLE_FUNCTIONS
 from vector_store import setup_vector_store
 from memory import AgentMemory
 from agent import run_agent
+from langchain_core.vectorstores import VectorStoreRetriever # Explicit import
+from typing import Optional
+
+# Global variable for the retriever (or pass it around)
+retriever: Optional[VectorStoreRetriever] = None
+
 from tools.query_documents import retriever as query_documents_retriever
 
 def print_tool_definitions():
@@ -43,17 +49,15 @@ def print_tool_definitions():
     print("\n================================")
 
 # --- Main Execution Block ---
-async def main():
-    global query_documents_retriever
-    
+async def main():    
     # Print tool definitions before starting
     print_tool_definitions()
     
     # Set up the vector store without including the conversation history file in file_paths.
     # The conversation history file will be automatically collected via the default parameter.
-    query_documents_retriever = setup_vector_store(file_paths=[CSV_FILE_PATH, ORDER_FILE_PATH], enable_memory=ENABLE_MEMORY)
+    setup_vector_store(file_paths=[CSV_FILE_PATH, ORDER_FILE_PATH], enable_memory=ENABLE_MEMORY)
 
-    if query_documents_retriever is None:
+    if retriever is None:
         print("Warning: Failed to initialize retriever. Review search functionality will be unavailable.")
         # Proceeding without retriever functionality
 

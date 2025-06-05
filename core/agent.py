@@ -96,6 +96,12 @@ async def run_agent(model: str, user_input: str, memory: AgentMemory):
             function_to_call = available_functions[function_name]
             try:
                 function_response = function_to_call(**function_args)
+
+                print(f"--- Agent --- Function {function_name} returned response: {function_response}")
+                if isinstance(function_response, dict):
+                    # Convert dict response to JSON string
+                    function_response = json.dumps(function_response)
+
                 print(f"--- Agent --- Function {function_name} executed.")
                 tool_message = {
                     "role": "tool",
