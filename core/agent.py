@@ -41,7 +41,7 @@ async def run_agent(model: str, user_input: str, memory: AgentMemory):
         if not response_dict or "message" not in response_dict:
             print("--- Agent --- Error: No message in LLM response.")
             memory.add_message({"role": "system", "content": "No response from LLM."})
-            return 
+            return
 
     except Exception as e:
         print(f"Error calling Ollama chat API: {e}")
