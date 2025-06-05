@@ -5,14 +5,15 @@ import json
 import ollama
 
 # --- Application Config & Constants ---
-from core.config import (
-    TOOL_DEFINITIONS,
-    AVAILABLE_FUNCTIONS,
-)
+from core.config import TOOL_DEFINITIONS, AVAILABLE_FUNCTIONS
 
 # --- Core Application Modules ---
 from core.memory import AgentMemory
 
+# --- Logging ---
+from logging_config import setup_logger
+
+logger = setup_logger(__name__)
 
 # --- Agent Runner ---
 async def run_agent(model: str, user_input: str, memory: AgentMemory):
@@ -20,13 +21,12 @@ async def run_agent(model: str, user_input: str, memory: AgentMemory):
 
     memory.add_message({"role": "user", "content": user_input})
     messages = memory.get_recent_messages()
-
-    # Define available tools
     tools = TOOL_DEFINITIONS
 
-    print("\n--- Agent --- Sending request to LLM...")
-    print("--- Sending Messages:", json.dumps(messages, indent=2)) # DEBUG: See messages sent
-    print("--- Sending Tools:", json.dumps(tools, indent=2)) # DEBUG: See tools sent
+    logger.debug("Sending request to LLM...")
+    logger.debug(f"Sending Messages: {json.dumps(messages, indent=2)}")
+    logger.debug(f"Sending Tools: {json.dumps(tools, indent=2)}")
+
     try:
         response = await client.chat(
             model=model,
@@ -35,132 +35,135 @@ async def run_agent(model: str, user_input: str, memory: AgentMemory):
         )
 
         response_dict = response.model_dump() if hasattr(response, 'model_dump') else response
-        print("--- LLM Raw Response:", json.dumps(response_dict, indent=2))
+        logger.debug(f"LLM Raw Response: {json.dumps(response_dict, indent=2)}")
 
-        # Check if response contains a message
         if not response_dict or "message" not in response_dict:
-            print("--- Agent --- Error: No message in LLM response.")
+            logger.error("No message in LLM response.")
             memory.add_message({"role": "system", "content": "No response from LLM."})
+            yield {"status": "error", "stage": "initial_response", "content": "No response from LLM."}
             return
 
     except Exception as e:
-        print(f"Error calling Ollama chat API: {e}")
+        logger.error(f"Error calling Ollama chat API: {e}")
         memory.add_message({"role": "system", "content": f"Error contacting LLM: {e}"})
+        yield {"status": "error", "stage": "initial_call", "error": str(e)}
         return
 
-    message = response_dict["message"] if isinstance(response_dict, dict) else response["message"]
+    message = response_dict["message"]
     memory.add_message(message)
+    yield {"status": "success", "stage": "initial_response", "content": message["content"]}
 
-    if not response["message"].get("tool_calls"):
-        print("\n--- Agent --- LLM Response (no tool call):")
-        print(response["message"]["content"])
+    if not message.get("tool_calls"):
+        logger.info("LLM Response (no tool call).")
         return
 
-    print("\n--- Agent --- LLM decided to use a tool.")
-    available_functions = AVAILABLE_FUNCTIONS
-
-    tool_calls_to_process = list(response["message"].get("tool_calls", []))
+    logger.info("LLM decided to use tool(s).")
+    tool_calls_to_process = list(message.get("tool_calls", []))
 
     for tool_call in tool_calls_to_process:
-        # Robustly access potentially missing keys
         function_info = tool_call.get("function", {})
         function_name = function_info.get("name")
         raw_function_args = function_info.get("arguments")
-        tool_call_id = tool_call.get("id") # Use this if provided by Ollama
+        tool_call_id = tool_call.get("id")
 
         if not function_name or raw_function_args is None:
-             print(f"--- Agent --- ERROR: Invalid tool call structure received: {tool_call}")
-             # Add minimal error message if possible
-             err_content = json.dumps({"error": "Received invalid tool call structure from LLM."})
-             memory.add_message({"role": "tool", "tool_call_id": tool_call_id, "name": function_name or "unknown", "content": err_content})
-             continue
+            logger.error(f"Invalid tool call structure: {tool_call}")
+            err_content = {"error": "Invalid tool call structure"}
+            memory.add_message({"role": "tool", "tool_call_id": tool_call_id, "name": function_name or "unknown", "content": json.dumps(err_content)})
+            yield {"status": "error", "stage": "tool_call", "tool": function_name, "error": err_content}
+            continue
 
+        # Parse args
         function_args = None
-        print(f"--- Agent --- Attempting Tool Call: {function_name}")
-
         if isinstance(raw_function_args, dict):
-            print("--- Agent --- Arguments received as dict.")
             function_args = raw_function_args
         elif isinstance(raw_function_args, str):
-             print("--- Agent --- Arguments received as string, attempting JSON parse.")
-             try:
-                 function_args = json.loads(raw_function_args)
-             except json.JSONDecodeError:
-                 print(f"--- Agent --- ERROR: Could not parse function arguments string: {raw_function_args}")
-                 err_content = json.dumps({"error": f"Malformed arguments JSON received: {raw_function_args}"})
-                 memory.add_message({"role": "tool", "tool_call_id": tool_call_id, "name": function_name, "content": err_content})
-                 continue
+            try:
+                function_args = json.loads(raw_function_args)
+            except json.JSONDecodeError as e:
+                err = f"Malformed JSON: {raw_function_args}"
+                logger.error(err)
+                memory.add_message({"role": "tool", "tool_call_id": tool_call_id, "name": function_name, "content": json.dumps({"error": err})})
+                yield {"status": "error", "stage": "tool_args", "tool": function_name, "error": err}
+                continue
         else:
-            print(f"--- Agent --- ERROR: Unexpected type for function arguments: {type(raw_function_args)}")
-            err_content = json.dumps({"error": f"Unexpected argument type: {type(raw_function_args)}"})
-            memory.add_message({"role": "tool", "tool_call_id": tool_call_id, "name": function_name, "content": err_content})
+            err = f"Unexpected type for args: {type(raw_function_args)}"
+            logger.error(err)
+            memory.add_message({"role": "tool", "tool_call_id": tool_call_id, "name": function_name, "content": json.dumps({"error": err})})
+            yield {"status": "error", "stage": "tool_args", "tool": function_name, "error": err}
             continue
 
         if function_args is None:
-             continue # Skip if args are invalid
+            continue
 
         attempt_count = memory.record_function_attempt(function_name, function_args)
-        print(f"--- Agent --- Calling: {function_name} (attempt {attempt_count}) | Args: {function_args}")
+        logger.info(f"Calling: {function_name} (attempt {attempt_count})")
 
-        if function_name in available_functions:
-            function_to_call = available_functions[function_name]
+        if function_name in AVAILABLE_FUNCTIONS:
             try:
+                function_to_call = AVAILABLE_FUNCTIONS[function_name]
                 function_response = function_to_call(**function_args)
 
-                print(f"--- Agent --- Function {function_name} returned response: {function_response}")
                 if isinstance(function_response, dict):
-                    # Convert dict response to JSON string
                     function_response = json.dumps(function_response)
 
-                print(f"--- Agent --- Function {function_name} executed.")
                 tool_message = {
                     "role": "tool",
                     "tool_call_id": tool_call_id,
                     "name": function_name,
-                    "content": function_response, # Should be JSON string
+                    "content": function_response,
                 }
                 memory.add_message(tool_message)
-                print(f"--- Agent --- Added tool response to memory.")
+                logger.info(f"{function_name} executed.")
+                yield {
+                    "status": "success",
+                    "stage": "tool_result",
+                    "tool": function_name,
+                    "response": function_response,
+                }
 
             except TypeError as e:
-                 # More specific error for bad arguments passed to the python function
-                 print(f"Error calling function {function_name} due to argument mismatch: {e}")
-                 error_content = json.dumps({"error": f"Argument mismatch calling {function_name}: {str(e)}. Check if LLM provided all required args correctly. Provided: {function_args}"})
-                 memory.add_message({"role": "tool", "tool_call_id": tool_call_id, "name": function_name, "content": error_content})
+                err = f"Argument mismatch: {e}"
+                logger.error(err)
+                memory.add_message({"role": "tool", "tool_call_id": tool_call_id, "name": function_name, "content": json.dumps({"error": err})})
+                yield {"status": "error", "stage": "tool_exec", "tool": function_name, "error": err}
             except Exception as e:
-                print(f"Error executing function {function_name}: {e}")
-                error_content = json.dumps({"error": f"Runtime error calling function {function_name}: {str(e)}"})
-                memory.add_message({"role": "tool", "tool_call_id": tool_call_id, "name": function_name, "content": error_content})
+                err = f"Runtime error: {e}"
+                logger.error(err)
+                memory.add_message({"role": "tool", "tool_call_id": tool_call_id, "name": function_name, "content": json.dumps({"error": err})})
+                yield {"status": "error", "stage": "tool_exec", "tool": function_name, "error": err}
         else:
-            print(f"Error: Function '{function_name}' not found in available_functions.")
-            error_content = json.dumps({"error": f"Function '{function_name}' is not implemented."})
-            memory.add_message({"role": "tool", "tool_call_id": tool_call_id, "name": function_name, "content": error_content})
+            err = f"Function '{function_name}' not implemented"
+            logger.error(err)
+            memory.add_message({"role": "tool", "tool_call_id": tool_call_id, "name": function_name, "content": json.dumps({"error": err})})
+            yield {"status": "error", "stage": "tool_missing", "tool": function_name, "error": err}
 
-
-    # After processing ALL tool calls, send updated history back to LLM
-    print("\n--- Agent --- Sending updated conversation history to LLM for final response...")
-    # print("--- Sending Messages for Final Response:", json.dumps(memory.get_recent_messages(), indent=2)) # DEBUG
+    # Final LLM response
+    logger.info("Sending updated history for final LLM response...")
     try:
-        # Ensure messages list is not empty before calling chat
-        if not memory.get_recent_messages():
-            print("--- Agent --- Error: No messages in history to send for final response.")
-            return
-
         final_response = await client.chat(
             model=model,
             messages=memory.get_recent_messages(),
-            # No tools needed here usually
         )
-        # print("--- Final LLM Raw Response:", json.dumps(final_response, indent=2)) # DEBUG
-        # Add the final response only if it contains content
-        if final_response["message"].get("content"):
-             memory.add_message(final_response["message"])
-             print("\n--- Agent --- Final LLM Response:\n")
-             print(final_response["message"]["content"])
-        else:
-             print("\n--- Agent --- LLM provided no final content response (might happen after tool error).")
 
+        if final_response["message"].get("content"):
+            memory.add_message(final_response["message"])
+            logger.info("Final response received.")
+            yield {
+                "status": "success",
+                "stage": "final_response",
+                "content": final_response["message"]["content"],
+            }
+        else:
+            logger.warning("No content in final response.")
+            yield {
+                "status": "warning",
+                "stage": "final_response",
+                "content": None,
+            }
 
     except Exception as e:
-        print(f"Error getting final response from Ollama: {e}")
-        memory.add_message({"role": "system", "content": f"Error getting final LLM response: {e}"})
+        err = f"Final response error: {e}"
+        logger.error(err)
+        memory.add_message({"role": "system", "content": f"Final response error: {e}"})
+        yield {"status": "error", "stage": "final_response", "error": str(e)}

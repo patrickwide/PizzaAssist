@@ -1,20 +1,46 @@
+# --- Standard Library ---
+from typing import List
+
+# --- Application Config ---
 from config import TOOL_DEFINITIONS
 
-def print_tool_definitions():
-    """Print all available tool definitions"""
-    print("\n=== Available Tool Definitions ===")
+# --- Logging ---
+from logging_config import setup_logger
+
+# Initialize logger
+logger = setup_logger(__name__)
+
+def print_tool_definitions() -> List[str]:
+    """Format and return tool definitions as a list of strings."""
+    output = []
+    output.append("\n=== Available Tool Definitions ===")
+    
     if not TOOL_DEFINITIONS:
-        print("No tool definitions available.")
-        return
-        
+        message = "No tool definitions available."
+        logger.warning(message)
+        output.append(message)
+        return output
+
     for tool in TOOL_DEFINITIONS:
         if "function" in tool:
             func = tool["function"]
-            print(f"\nTool: {func.get('name', 'Unnamed')}")
-            print(f"Description: {func.get('description', 'No description')}")
+            tool_name = func.get('name', 'Unnamed')
+            description = func.get('description', 'No description')
+            
+            output.append(f"\nTool: {tool_name}")
+            output.append(f"Description: {description}")
+            
             if 'parameters' in func:
-                print("Parameters:")
+                output.append("Parameters:")
                 for param_name, param_details in func["parameters"].get("properties", {}).items():
                     required = param_name in func["parameters"].get("required", [])
-                    print(f"  - {param_name}: {param_details.get('description', 'No description')} {'(Required)' if required else '(Optional)'}")
-    print("\n================================")
+                    param_desc = param_details.get('description', 'No description')
+                    req_status = '(Required)' if required else '(Optional)'
+                    output.append(f"  - {param_name}: {param_desc} {req_status}")
+    
+    output.append("\n================================")
+    
+    # Log the full tool definitions at debug level
+    logger.debug("Tool definitions loaded:\n%s", "\n".join(output))
+    
+    return output

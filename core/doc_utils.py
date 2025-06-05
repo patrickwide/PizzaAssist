@@ -8,6 +8,10 @@ import pandas as pd
 
 # --- Application Modules ---
 from langchain.schema import Document
+from logging_config import setup_logger
+
+# Initialize logger
+logger = setup_logger(__name__)
 
 
 def parse_csv_file(file_path: str) -> List[Document]:
@@ -20,7 +24,7 @@ def parse_csv_file(file_path: str) -> List[Document]:
             metadata = {"source": file_path, "row": i}
             docs.append(Document(page_content=content, metadata=metadata))
     except Exception as e:
-        print(f"Error parsing CSV {file_path}: {e}")
+        logger.error(f"Error parsing CSV {file_path}: {e}")
     return docs
 
 
@@ -45,7 +49,7 @@ def parse_json_file(file_path: str) -> List[Document]:
                     except Exception:
                         continue
     except Exception as e:
-        print(f"Error parsing JSON {file_path}: {e}")
+        logger.error(f"Error parsing JSON {file_path}: {e}")
     return docs
 
 
@@ -57,7 +61,7 @@ def parse_text_file(file_path: str) -> List[Document]:
             content = f.read()
             docs.append(Document(page_content=content, metadata={"source": file_path}))
     except Exception as e:
-        print(f"Error parsing text {file_path}: {e}")
+        logger.error(f"Error parsing text {file_path}: {e}")
     return docs
 
 
@@ -74,8 +78,9 @@ def parse_files_to_documents(file_paths: List[str]) -> List[Document]:
         elif ext in ['.txt', '.md', '.markdown']:
             all_docs.extend(parse_text_file(file_path))
         else:
-            print(f"Unsupported file type for {file_path}, skipping.")
+            logger.warning(f"Unsupported file type for {file_path}, skipping.")
     return all_docs
+
 
 def get_memory_documents(memory_history: List[Dict[str, Any]]) -> List[Document]:
     """Convert conversation history to Documents for memory integration."""

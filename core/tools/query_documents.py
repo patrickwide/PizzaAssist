@@ -1,3 +1,4 @@
+# --- Standard Library ---
 import os
 import sys
 from typing import Optional, List, Dict, Any
@@ -7,6 +8,12 @@ from langchain_core.vectorstores import VectorStoreRetriever
 
 # Add the parent directory to Python path to allow core imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+# --- Logging ---
+from logging_config import setup_logger
+
+# Initialize logger
+logger = setup_logger(__name__)
 
 # Global retriever instance
 retriever = None
@@ -30,21 +37,22 @@ def query_documents(query: str, retriever_override: Optional[VectorStoreRetrieve
     """
     active_retriever = retriever_override if retriever_override is not None else retriever
     if active_retriever is None:
+        logger.error("Document database could not be initialized")
         return json.dumps({"error": "Document database could not be initialized. Cannot search documents."})
 
-    print(f"\n--- Tool Call: query_documents ---")
-    print(f"--- Query: {query}")
+    logger.info(f"Querying documents with: {query}")
     try:
         results: List[Document] = active_retriever.invoke(query)
         if not results:
+            logger.info("No relevant documents found")
             return json.dumps({"message": "No relevant documents found for your query."})
 
         formatted_results = [{"content": doc.page_content, "metadata": doc.metadata} for doc in results]
-        print(f"--- Found {len(results)} documents.")
+        logger.info(f"Found {len(results)} relevant documents")
         return json.dumps(formatted_results, indent=2)
 
     except Exception as e:
-        print(f"Error during document query: {e}")
+        logger.error(f"Error during document query: {e}")
         return json.dumps({"error": f"Failed to query documents: {str(e)}"})
 
 def get_tool_info() -> Dict[str, Any]:

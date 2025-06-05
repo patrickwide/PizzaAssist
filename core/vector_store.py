@@ -18,13 +18,14 @@ from constants import (
     STORE_METADATA_FILE,
 )
 
-# --- Internal Modules ---
-from doc_utils import parse_files_to_documents, get_memory_documents
+# --- Logging ---
+from logging_config import setup_logger
+
+# Initialize logger
+logger = setup_logger(__name__)
 
 def get_files_hash(file_paths: List[str]) -> str:
-    """
-    Generate a hash of the file contents and modification times to detect changes.
-    """
+    """Generate a hash of the file contents and modification times to detect changes."""
     hasher = hashlib.md5()
     for file_path in sorted(file_paths):  # Sort for consistency
         if os.path.exists(file_path):
@@ -57,7 +58,8 @@ def load_store_metadata(db_location: str) -> dict:
         try:
             with open(metadata_path, "r") as f:
                 return json.load(f)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error loading store metadata: {e}")
             return {}
     return {}
 
@@ -76,29 +78,7 @@ def setup_vector_store(
     collection_name: str = COLLECTION_NAME,
     force_refresh: bool = False
 ):
-    """
-    Initializes the vector store and retriever from a list of files.
-    Handles CSV, JSON, TXT, Markdown formats.
-    Integrates conversation history if enabled.
-
-    The store will only be recreated if:
-    - It doesn't exist
-    - The source files have changed
-    - The embedding model has changed
-    - force_refresh is True
-
-    Args:
-        file_paths: List of files to index
-        enable_memory: Whether to include conversation history
-        conversation_file_path: Path to conversation history file
-        db_location: Where to store the vector database
-        embedding_model: Model to use for embeddings
-        collection_name: Name for the Chroma collection
-        force_refresh: Force reindexing even if no changes detected
-
-    Returns:
-        The initialized retriever object or None if setup fails
-    """
+    """Initialize vector store and retriever from files."""
     # Initialize required directories
     initialize_directories()
 
@@ -115,7 +95,7 @@ def setup_vector_store(
 
     if not needs_refresh:
         try:
-            print("Loading existing vector store...")
+            logger.info("Loading existing vector store...")
             embeddings = OllamaEmbeddings(model=embedding_model)
             vector_store = Chroma(
                 collection_name=collection_name,
@@ -124,14 +104,15 @@ def setup_vector_store(
             )
             return vector_store.as_retriever(search_kwargs={"k": 3})
         except Exception as e:
-            print(f"Error loading existing vector store, will recreate: {e}")
+            logger.error(f"Error loading existing vector store, will recreate: {e}")
             needs_refresh = True
 
     if needs_refresh:
-        print("Setting up vector store from files:", file_paths)
+        logger.info(f"Setting up vector store from files: {file_paths}")
         embeddings = OllamaEmbeddings(model=embedding_model)
 
         # Parse documents from the provided files
+        from doc_utils import parse_files_to_documents, get_memory_documents
         documents = parse_files_to_documents(file_paths)
 
         # Integrate conversation history if memory is enabled
@@ -149,12 +130,12 @@ def setup_vector_store(
                             conversation_data = json.load(f)
                     documents.extend(get_memory_documents(conversation_data))
                 except Exception as e:
-                    print(f"Error reading conversation history from {conversation_file_path}: {e}")
+                    logger.error(f"Error reading conversation history from {conversation_file_path}: {e}")
             else:
-                print(f"Warning: {conversation_file_path} not found. Conversation memory not loaded.")
+                logger.warning(f"Conversation history file not found: {conversation_file_path}")
 
         if not documents:
-            print("No documents found to add to the vector store.")
+            logger.warning("No documents found to add to the vector store.")
             return None
 
         try:
@@ -166,14 +147,14 @@ def setup_vector_store(
             # Always add documents (overwrite or append)
             ids = [f"doc_{i}" for i in range(len(documents))]
             vector_store.add_documents(documents=documents, ids=ids)
-            print(f"Added {len(documents)} documents to the vector store.")
+            logger.info(f"Added {len(documents)} documents to the vector store.")
             
             # Save metadata about this store
             save_store_metadata(db_location, current_files_hash)
             
             retriever = vector_store.as_retriever(search_kwargs={"k": 3})
-            print("Retriever setup complete.")
+            logger.info("Retriever setup complete.")
             return retriever
         except Exception as e:
-            print(f"Error setting up vector store: {e}")
+            logger.error(f"Error setting up vector store: {e}")
             return None
