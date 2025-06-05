@@ -3,6 +3,14 @@ import json
 from langchain.schema import Document
 from langchain_core.vectorstores import VectorStoreRetriever
 
+# Global retriever instance
+retriever = None
+
+def set_retriever(r: VectorStoreRetriever):
+    """Set the global retriever instance."""
+    global retriever
+    retriever = r
+
 def query_documents(query: str, retriever_override: Optional[VectorStoreRetriever] = None) -> str:
     """
     Searches the indexed documents (reviews, orders, or any supported file) for content relevant to the user's query.
@@ -15,7 +23,6 @@ def query_documents(query: str, retriever_override: Optional[VectorStoreRetrieve
     Returns:
         A JSON string containing the retrieved documents or an error message.
     """
-    global retriever 
     active_retriever = retriever_override if retriever_override is not None else retriever
     if active_retriever is None:
         return json.dumps({"error": "Document database could not be initialized. Cannot search documents."})

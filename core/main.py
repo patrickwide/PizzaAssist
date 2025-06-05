@@ -18,7 +18,7 @@ from constants import (
 from config import TOOL_DEFINITIONS, AVAILABLE_FUNCTIONS
 
 # --- Core Application Modules ---
-from tools.query_documents import query_documents  # Updated import
+from tools.query_documents import query_documents, set_retriever
 from vector_store import setup_vector_store
 from memory import AgentMemory
 from agent import run_agent
@@ -65,6 +65,9 @@ async def main():
             file_paths=[CSV_FILE_PATH, ORDER_FILE_PATH],
             enable_memory=ENABLE_MEMORY
         )
+
+        # Set the retriever in query_documents module
+        set_retriever(retriever)
 
         # If retriever is initialized correctly
         if retriever is not None:
