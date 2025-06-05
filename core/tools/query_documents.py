@@ -1,7 +1,12 @@
+import os
+import sys
 from typing import Optional, List, Dict, Any
 import json
 from langchain.schema import Document
 from langchain_core.vectorstores import VectorStoreRetriever
+
+# Add the parent directory to Python path to allow core imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # Global retriever instance
 retriever = None

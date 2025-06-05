@@ -4,16 +4,12 @@ from typing import List, Dict, Any, Optional
 
 # --- Agent Memory ---
 def make_serializable(obj):
-    if isinstance(obj, dict):
-        return {k: make_serializable(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [make_serializable(i) for i in obj]
-    elif hasattr(obj, 'to_dict'):
-        return make_serializable(obj.to_dict())
-    elif hasattr(obj, '__dict__') and not isinstance(obj, str):
-        return make_serializable(vars(obj))
-    else:
-        return obj
+    """Convert objects to JSON serializable format"""
+    if hasattr(obj, 'model_dump'):
+        return obj.model_dump()
+    elif hasattr(obj, '__dict__'):
+        return obj.__dict__
+    return obj
 
 class AgentMemory:
     """Class to maintain conversation history and context for the agent"""
@@ -26,7 +22,9 @@ class AgentMemory:
             self.load_history_from_file(self.history_file)
 
     def add_message(self, message: Dict[str, Any]) -> None:
-        self.conversation_history.append(message)
+        # Ensure message is serializable before adding
+        serializable_message = {k: make_serializable(v) for k, v in message.items()}
+        self.conversation_history.append(serializable_message)
         if len(self.conversation_history) > self.max_history:
             # A simple trim keeping the last max_history items
             self.conversation_history = self.conversation_history[-self.max_history:]
