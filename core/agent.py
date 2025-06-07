@@ -11,7 +11,7 @@ import ollama
 from core.config import TOOL_DEFINITIONS, AVAILABLE_FUNCTIONS
 
 # --- Core Application Modules ---
-from core.memory import AgentMemory
+from core.memory import ChatHistoryManager
 
 # --- Logging ---
 from logging_config import setup_logger
@@ -19,7 +19,7 @@ from logging_config import setup_logger
 logger = setup_logger(__name__)
 
 # --- Agent Runner ---
-async def run_agent(model: str, user_input: str, memory: AgentMemory, system_message: Optional[str] = None):
+async def run_agent(model: str, user_input: str, memory: ChatHistoryManager, system_message: Optional[str] = None):
     """
     Orchestrates a chat session with Ollama, allowing an optional system prompt.
 

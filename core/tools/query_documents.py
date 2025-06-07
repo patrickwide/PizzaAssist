@@ -18,7 +18,7 @@ logger = setup_logger(__name__)
 # Global retriever instance
 retriever = None
 
-def set_retriever(r: VectorStoreRetriever):
+def set_documents_retriever(r: VectorStoreRetriever):
     """Set the global retriever instance."""
     global retriever
     retriever = r

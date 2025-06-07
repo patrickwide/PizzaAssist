@@ -16,24 +16,6 @@ This is an AI-powered assistant for a pizza restaurant that supports:
 
 ---
 
-## 🗂️ Project Structure
-
-```
-
-ai\_app/
-├── core/                      # Core logic: tools, memory, vector store, utils
-├── server/                    # FastAPI application
-├── main.py                    # Entry point (CLI or server)
-├── logging\_config.py          # Centralized logging config
-├── requirements.txt           # Python dependencies
-├── setup.py                   # Package setup
-├── README.md                  # This file
-└── venv/                      # Python virtual environment
-
-````
-
----
-
 ## ⚙️ Installation
 
 1. **Install and Setup Ollama**
@@ -84,8 +66,7 @@ ai\_app/
 This launches the assistant in the terminal with natural language support.
 
 ```bash
-cd core
-python main.py
+python cli.py
 ```
 
 You'll see:
@@ -138,15 +119,7 @@ You'll see logs like:
   * Required: `query`
   * Description: Searches and retrieves content from indexed documents
 
----
 
-## 📦 Packaging
-
-To package the project:
-
-```bash
-python setup.py sdist bdist_wheel
-```
 
 ---
 

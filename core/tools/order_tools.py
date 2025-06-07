@@ -7,7 +7,7 @@ import json
 
 # Add the parent directory to Python path to allow core imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from core.constants import ORDER_FILE_PATH
+from constants import ORDER_FILE_PATH
 
 # --- Logging ---
 from logging_config import setup_logger

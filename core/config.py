@@ -12,7 +12,7 @@ from logging_config import setup_logger
 logger = setup_logger(__name__)
 
 # Import constants and tools
-from core.constants import *
+from constants import *
 from core.tools import load_tools
 
 try:

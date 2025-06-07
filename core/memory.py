@@ -20,7 +20,7 @@ def make_serializable(obj: Any) -> Any:
     else:
         return str(obj)
 
-class AgentMemory:
+class ChatHistoryManager:
     """Class to maintain conversation history and context for the agent"""
     def __init__(self, max_history: int = 10, history_file: Optional[str] = None):
         self.max_history = max_history

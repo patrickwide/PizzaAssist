@@ -1,0 +1,60 @@
+[project]
+name = "PizzaAssist"
+version = "0.1.0"
+description = "AI assistant for pizza ordering via CLI and FastAPI"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+
+authors = [
+    { name = "Your Name", email = "you@example.com" }
+]
+
+# Project dependencies
+dependencies = [
+    # Web framework
+    "fastapi",
+    "uvicorn[standard]",
+    "python-multipart",
+
+    # LangChain core & extensions
+    "langchain",
+    "langchain-core",
+    "langchain-ollama",
+    "langchain-chroma",
+    "langchain-community",
+
+    # LLM backend
+    "ollama",
+
+    # Vector store
+    "chromadb",
+
+    # Data handling
+    "pandas",
+    "pdf2image",
+
+    # Utilities
+    "websockets",
+    "python-dotenv",
+    "nest_asyncio"
+]
+
+# Command-line scripts
+[project.scripts]
+pizzaassist-cli = "cli:run_cli"          # Runs cli.py → run_cli()
+pizzaassist-server = "main:main"      # Runs main.py → main()
+
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+# Tell setuptools where to find modules/packages
+[tool.setuptools]
+packages = ["core", "server"]
+py-modules = ["cli", "main", "logging_config", "__init__", "constants"]
+
+# Include any data files inside these folders
+[tool.setuptools.package-data]
+core = ["*.json", "*.txt", "*.yaml"]
+server = ["*.json", "*.txt", "*.yaml"]

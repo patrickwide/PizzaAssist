@@ -7,7 +7,7 @@ import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from core.agent import run_agent
-from core.constants import OLLAMA_MODEL, SYSTEM_MESSAGE
+from constants import OLLAMA_MODEL, SYSTEM_MESSAGE
 from .initialization import get_app_state, is_app_ready
 from logging_config import setup_logger
 
