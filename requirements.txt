@@ -24,3 +24,7 @@ pdf2image
 websockets
 python-dotenv
 nest_asyncio
+
+# Install wheel and setuptools
+wheel
+setuptools
