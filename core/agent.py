@@ -1,6 +1,9 @@
 # --- Standard Library ---
 import json
 
+# --- Type Hinting ---
+from typing import Optional
+
 # --- Third-Party Libraries ---
 import ollama
 
@@ -16,8 +19,29 @@ from logging_config import setup_logger
 logger = setup_logger(__name__)
 
 # --- Agent Runner ---
-async def run_agent(model: str, user_input: str, memory: AgentMemory):
+async def run_agent(model: str, user_input: str, memory: AgentMemory, system_message: Optional[str] = None):
+    """
+    Orchestrates a chat session with Ollama, allowing an optional system prompt.
+
+    Args:
+        model (str): The Ollama model to use (e.g., "llama3.2").
+        user_input (str): The latest user message/content.
+        memory (AgentMemory): The agent’s memory, storing past messages and tool-call history.
+        system_message (Optional[str]): An optional “system” message to prime the assistant.
+    Yields:
+        Dict[str, Any]: A sequence of status updates and content strings for each stage:
+            - initial_response: The LLM’s first reply (or error).
+            - tool_result: Results of any tool invocation (or error).
+            - final_response: The LLM’s final reply after tool usage (or warning/error).
+    """
+
     client = ollama.AsyncClient()
+
+    # Only add system message if there are no messages in memory AND a system message is provided
+    recent_messages = memory.get_recent_messages()
+    if system_message and len(recent_messages) == 0:
+        logger.debug("Adding system message as first message in conversation.")
+        memory.add_message({"role": "system", "content": system_message})
 
     memory.add_message({"role": "user", "content": user_input})
     messages = memory.get_recent_messages()
@@ -138,21 +162,38 @@ async def run_agent(model: str, user_input: str, memory: AgentMemory):
             memory.add_message({"role": "tool", "tool_call_id": tool_call_id, "name": function_name, "content": json.dumps({"error": err})})
             yield {"status": "error", "stage": "tool_missing", "tool": function_name, "error": err}
 
-    # Final LLM response
+  # --- Final LLM response (WITH UNWRAPPING) ---
     logger.info("Sending updated history for final LLM response...")
     try:
         final_response = await client.chat(
             model=model,
             messages=memory.get_recent_messages(),
+            tools=tools,
         )
 
-        if final_response["message"].get("content"):
-            memory.add_message(final_response["message"])
+        # Convert top‐level final_response into a dict if needed
+        final_dict = final_response.model_dump() if hasattr(final_response, "model_dump") else final_response
+
+        # Unwrap the nested Message object (if present)
+        raw_final_msg = final_dict.get("message", {})
+        if hasattr(raw_final_msg, "model_dump"):
+            final_message = raw_final_msg.model_dump()
+        elif isinstance(raw_final_msg, dict):
+            final_message = raw_final_msg
+        else:
+            final_message = {
+                "role": getattr(raw_final_msg, "role", ""),
+                "content": getattr(raw_final_msg, "content", ""),
+                "tool_calls": getattr(raw_final_msg, "tool_calls", []),
+            }
+
+        if final_message.get("content"):
+            memory.add_message(final_message)
             logger.info("Final response received.")
             yield {
                 "status": "success",
                 "stage": "final_response",
-                "content": final_response["message"]["content"],
+                "content": final_message["content"],
             }
         else:
             logger.warning("No content in final response.")

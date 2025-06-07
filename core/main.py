@@ -40,11 +40,9 @@ retriever: Optional[VectorStoreRetriever] = None
 # --- Main Execution Block ---
 async def main():    
     try:
-        # Get and display tool definitions
-        tool_definitions = print_tool_definitions()
-        for line in tool_definitions:
-            logger.info(line)
-
+        # display tool definitions
+        print_tool_definitions()
+        
         # Initialize memory
         memory = AgentMemory(
             max_history=15,

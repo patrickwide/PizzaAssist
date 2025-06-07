@@ -11,36 +11,26 @@ from logging_config import setup_logger
 logger = setup_logger(__name__)
 
 def print_tool_definitions() -> List[str]:
-    """Format and return tool definitions as a list of strings."""
-    output = []
-    output.append("\n=== Available Tool Definitions ===")
-    
-    if not TOOL_DEFINITIONS:
-        message = "No tool definitions available."
-        logger.warning(message)
-        output.append(message)
-        return output
+    """Initialize and log available tool definitions"""
+    try:
+        logger.info("🔧 Initializing tools...")
+        
+        if not TOOL_DEFINITIONS:
+            logger.warning("⚠️  No tool definitions available")
+            return
 
-    for tool in TOOL_DEFINITIONS:
-        if "function" in tool:
-            func = tool["function"]
-            tool_name = func.get('name', 'Unnamed')
-            description = func.get('description', 'No description')
+        logger.info(f"📋 Available tools ({len(TOOL_DEFINITIONS)}):")
+        
+        for i, tool in enumerate(TOOL_DEFINITIONS, 1):
+            # Compact one-liner with key info
+            required_params = tool.get('parameters', {}).get('required', [])
+            logger.info(f"  🔨 #{i}: {tool['name']} | Required: {', '.join(required_params)}")
             
-            output.append(f"\nTool: {tool_name}")
-            output.append(f"Description: {description}")
-            
-            if 'parameters' in func:
-                output.append("Parameters:")
-                for param_name, param_details in func["parameters"].get("properties", {}).items():
-                    required = param_name in func["parameters"].get("required", [])
-                    param_desc = param_details.get('description', 'No description')
-                    req_status = '(Required)' if required else '(Optional)'
-                    output.append(f"  - {param_name}: {param_desc} {req_status}")
-    
-    output.append("\n================================")
-    
-    # Log the full tool definitions at debug level
-    logger.debug("Tool definitions loaded:\n%s", "\n".join(output))
-    
-    return output
+            # Optional: Show description on separate line for readability
+            if 'description' in tool:
+                logger.info(f"     📝 {tool['description'][:80]}{'...' if len(tool['description']) > 80 else ''}")
+
+        logger.info("🎉 Tools initialization completed")
+
+    except Exception as e:
+        logger.error(f"❌ Tools initialization failed: {e}", exc_info=True)
