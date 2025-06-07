@@ -1,5 +1,5 @@
 [project]
-name = "PizzaAssist"
+name = "pizza-assist"
 version = "0.1.0"
 description = "AI assistant for pizza ordering via CLI and FastAPI"
 readme = "README.md"
@@ -7,7 +7,7 @@ requires-python = ">=3.8"
 license = "MIT"
 
 authors = [
-    { name = "Your Name", email = "you@example.com" }
+    { name = "patrickwide", email = "patrickwide254@gmail.com" }
 ]
 
 # Project dependencies
@@ -42,8 +42,8 @@ dependencies = [
 
 # Command-line scripts
 [project.scripts]
-pizzaassist-cli = "cli:run_cli"          # Runs cli.py → run_cli()
-pizzaassist-server = "main:main"      # Runs main.py → main()
+pizza-assist-cli = "cli:run_cli"          # Runs cli.py → run_cli()
+pizza-assist-server = "main:main"      # Runs main.py → main()
 
 [build-system]
 requires = ["setuptools>=80"]

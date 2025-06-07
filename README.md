@@ -105,6 +105,43 @@ You'll see logs like:
 
 ---
 
+## 📦 Run and Distribute as a Python Package
+
+### How to Install and Run Locally as a Package
+
+1. **Install the package in development mode**
+   ```bash
+   pip install -e .
+   ```
+
+2. **Run the web server**
+   ```bash
+   pizza-assist-server
+   ```
+
+### How to Build the Package
+
+1. **Build the distribution packages**
+   ```bash
+   python -m build
+   ```
+   This will create both wheel (`.whl`) and source distribution (`.tar.gz`) files in the `dist/` directory.
+
+### How to Distribute and Run in Production
+
+1. **Install from a distribution file**
+   ```bash
+   pip install dist/pizza_assist-0.1.0-py3-none-any.whl
+   ```
+
+2. **Run in production**
+   ```bash
+   
+   # Start the web server
+   pizza-assist-server --host 0.0.0.0 --port 8000
+   ```
+---
+
 ## 🧪 Tooling
 
 ### Available Tools
@@ -118,8 +155,6 @@ You'll see logs like:
 
   * Required: `query`
   * Description: Searches and retrieves content from indexed documents
-
-
 
 ---
 
