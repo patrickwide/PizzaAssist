@@ -55,7 +55,7 @@ async def run_agent(model: str, user_input: str, memory: ChatHistoryManager, sys
         response = await client.chat(
             model=model,
             messages=messages,
-            tools=tools,
+            # tools=tools,
         )
 
         response_dict = response.model_dump() if hasattr(response, 'model_dump') else response
@@ -168,7 +168,7 @@ async def run_agent(model: str, user_input: str, memory: ChatHistoryManager, sys
         final_response = await client.chat(
             model=model,
             messages=memory.get_recent_messages(),
-            tools=tools,
+            # tools=tools,
         )
 
         # Convert top‐level final_response into a dict if needed

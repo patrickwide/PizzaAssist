@@ -13,6 +13,21 @@ from logging_config import setup_logger
 
 logger = setup_logger(__name__)
 
+# Define lifespan context manager
+async def async_lifespan(app: FastAPI):
+    """Initialize and cleanup application components"""
+    # Startup
+    logger.info("🚀 FastAPI application starting up...")
+    await initialize_app_components()
+    logger.info("✅ FastAPI application startup completed")
+    
+    yield
+    
+    # Shutdown
+    logger.info("🛑 FastAPI application shutting down...")
+    # Add any cleanup logic here if needed
+    logger.info("✅ FastAPI application shutdown completed")
+
 def create_app() -> FastAPI:
     """
     Create and configure the FastAPI application
@@ -27,7 +42,8 @@ def create_app() -> FastAPI:
         description="AI-powered pizza restaurant assistant with WebSocket support",
         version="1.0.0",
         docs_url="/docs",
-        redoc_url="/redoc"
+        redoc_url="/redoc",
+        lifespan=async_lifespan
     )
     
     # Add CORS middleware
@@ -38,21 +54,6 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
-    # Add startup event
-    @app.on_event("startup")
-    async def startup_event():
-        """Initialize application components on startup"""
-        logger.info("🚀 FastAPI application starting up...")
-        await initialize_app_components()
-        logger.info("✅ FastAPI application startup completed")
-    
-    @app.on_event("shutdown")
-    async def shutdown_event():
-        """Cleanup on application shutdown"""
-        logger.info("🛑 FastAPI application shutting down...")
-        # Add any cleanup logic here if needed
-        logger.info("✅ FastAPI application shutdown completed")
     
     # Include routers
     app.include_router(websocket_router)
@@ -68,6 +69,8 @@ def create_app() -> FastAPI:
             "endpoints": {
                 "websocket": "/ws/ai",
                 "health": "/health",
+                "status": "/status",
+                "info": "/info",
                 "docs": "/docs"
             }
         }

@@ -13,8 +13,8 @@ from logging_config import setup_logger
 
 logger = setup_logger(__name__)
 
-# Create router for API endpoints
-api_router = APIRouter(prefix="/api/v1", tags=["api"])
+# Create router for API endpoints - removed prefix to make routes accessible at root
+api_router = APIRouter(tags=["api"])
 
 class HealthResponse(BaseModel):
     """Health check response model"""
@@ -47,9 +47,9 @@ async def health_check():
                 "max_history": getattr(app_state.memory, 'max_history', None) if app_state.memory else None
             },
             "vector_store": {
-                "status": "healthy" if app_state.retriever is not None else "limited",
-                "initialized": app_state.retriever is not None,
-                "type": type(getattr(app_state.retriever, 'vectorstore', None)).__name__ if app_state.retriever else None
+                "status": "healthy" if app_state.document_retriever is not None else "limited",
+                "initialized": app_state.document_retriever is not None,
+                "type": type(getattr(app_state.document_retriever, 'vectorstore', None)).__name__ if app_state.document_retriever else None
             },
             "initialization": {
                 "status": "healthy" if app_state.initialized else "failed",
@@ -87,10 +87,10 @@ async def get_status():
                 "history_file": getattr(app_state.memory, 'history_file', None) if app_state.memory else None
             },
             "vector_store": {
-                "initialized": app_state.retriever is not None,
-                "vector_store_type": type(getattr(app_state.retriever, 'vectorstore', None)).__name__ if app_state.retriever else None,
-                "search_kwargs": getattr(app_state.retriever, 'search_kwargs', None) if app_state.retriever else None,
-                "tags": getattr(app_state.retriever, 'tags', None) if app_state.retriever else None
+                "initialized": app_state.document_retriever is not None,
+                "vector_store_type": type(getattr(app_state.document_retriever, 'vectorstore', None)).__name__ if app_state.document_retriever else None,
+                "search_kwargs": getattr(app_state.document_retriever, 'search_kwargs', None) if app_state.document_retriever else None,
+                "tags": getattr(app_state.document_retriever, 'tags', None) if app_state.document_retriever else None
             },
             "initialization": {
                 "completed": app_state.initialized,
@@ -185,7 +185,7 @@ async def get_metrics():
             "total_conversations": "Not implemented",  # You can track this
             "components": {
                 "memory_initialized": app_state.memory is not None,
-                "vector_store_initialized": app_state.retriever is not None,
+                "vector_store_initialized": app_state.document_retriever is not None,
                 "app_initialized": app_state.initialized
             }
         }
