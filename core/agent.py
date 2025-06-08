@@ -1,5 +1,6 @@
 # --- Standard Library ---
 import json
+import time
 
 # --- Type Hinting ---
 from typing import Optional
@@ -26,13 +27,13 @@ async def run_agent(model: str, user_input: str, memory: ChatHistoryManager, sys
     Args:
         model (str): The Ollama model to use (e.g., "llama3.2").
         user_input (str): The latest user message/content.
-        memory (AgentMemory): The agent’s memory, storing past messages and tool-call history.
-        system_message (Optional[str]): An optional “system” message to prime the assistant.
+        memory (AgentMemory): The agent's memory, storing past messages and tool-call history.
+        system_message (Optional[str]): An optional "system" message to prime the assistant.
     Yields:
         Dict[str, Any]: A sequence of status updates and content strings for each stage:
-            - initial_response: The LLM’s first reply (or error).
+            - initial_response: The LLM's first reply (or error).
             - tool_result: Results of any tool invocation (or error).
-            - final_response: The LLM’s final reply after tool usage (or warning/error).
+            - final_response: The LLM's final reply after tool usage (or warning/error).
     """
 
     client = ollama.AsyncClient()
@@ -75,11 +76,31 @@ async def run_agent(model: str, user_input: str, memory: ChatHistoryManager, sys
 
     message = response_dict["message"]
     memory.add_message(message)
-    yield {"status": "success", "stage": "initial_response", "content": message["content"]}
 
-    if not message.get("tool_calls"):
+
+    # Process LLM message response
+    if message.get("content") and not message.get("tool_calls"):
+        # Case: Normal assistant message with no tool usage
+        yield {
+            "status": "success",
+            "stage": "initial_response",
+            "content": message["content"]
+        }
         logger.info("LLM Response (no tool call).")
         return
+
+    elif message.get("tool_calls"):
+        # Case: Assistant invoked tool(s)
+        for tool_call in message["tool_calls"]:
+            yield {
+                "status": "success",
+                "stage": "tool_call",
+                "tool": tool_call["function"]["name"],  # e.g., "query_documents"
+                "arguments": tool_call["function"]["arguments"],
+                "content": message.get("content", "")  # optional, if content accompanies the tool call
+            }
+        logger.info("LLM decided to use tool(s).")
+
 
     logger.info("LLM decided to use tool(s).")
     tool_calls_to_process = list(message.get("tool_calls", []))
@@ -125,8 +146,10 @@ async def run_agent(model: str, user_input: str, memory: ChatHistoryManager, sys
 
         if function_name in AVAILABLE_FUNCTIONS:
             try:
+                start_time = time.time()
                 function_to_call = AVAILABLE_FUNCTIONS[function_name]
                 function_response = function_to_call(**function_args)
+                execution_time = time.time() - start_time
 
                 if isinstance(function_response, dict):
                     function_response = json.dumps(function_response)
@@ -143,7 +166,10 @@ async def run_agent(model: str, user_input: str, memory: ChatHistoryManager, sys
                     "status": "success",
                     "stage": "tool_result",
                     "tool": function_name,
+                    "args": function_args,
                     "response": function_response,
+                    "execution_info": f"Executed {function_name} with args: {json.dumps(function_args, indent=2)}",
+                    "execution_time_ms": round(execution_time * 1000, 2)
                 }
 
             except TypeError as e:

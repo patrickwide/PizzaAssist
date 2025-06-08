@@ -2,7 +2,7 @@ import asyncio
 import websockets
 
 async def test_socket():
-    uri = "wss://9135-34-125-23-187.ngrok-free.app/ws/ai"
+    uri = "wss://d176-34-125-43-15.ngrok-free.app/ws/ai"
     async with websockets.connect(uri) as websocket:
         try:
             while True:

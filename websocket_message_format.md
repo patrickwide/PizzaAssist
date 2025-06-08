@@ -14,7 +14,10 @@ All messages are sent as JSON objects with the following base structure:
     "content": string, // Optional: main message content
     "error": string,   // Optional: error message if status is "error"
     "tool": string,    // Optional: tool name when using tools
-    "response": string // Optional: tool response content
+    "response": string, // Optional: tool response content
+    "arguments": object, // Optional: tool call arguments
+    "execution_info": string, // Optional: tool execution details
+    "execution_time_ms": number // Optional: tool execution time in milliseconds
 }
 ```
 
@@ -43,13 +46,31 @@ Messages from the AI agent during conversation processing.
 }
 ```
 
+#### Tool Call
+```json
+{
+    "status": "success",
+    "stage": "tool_call",
+    "tool": "tool_name",
+    "arguments": {
+        // Tool-specific arguments
+    },
+    "content": "Optional content accompanying the tool call"
+}
+```
+
 #### Tool Result
 ```json
 {
     "status": "success",
     "stage": "tool_result",
     "tool": "tool_name",
-    "response": "tool execution result"
+    "args": {
+        // Arguments used in the tool call
+    },
+    "response": "tool execution result",
+    "execution_info": "Detailed execution information",
+    "execution_time_ms": 123.45
 }
 ```
 
@@ -74,11 +95,11 @@ Various error conditions that may occur during processing.
 }
 ```
 
-#### Tool-specific Error
+#### Tool-specific Errors
 ```json
 {
     "status": "error",
-    "stage": "tool_exec",
+    "stage": "tool_exec" | "tool_args" | "tool_missing" | "tool_call",
     "tool": "tool_name",
     "error": "Error description"
 }
@@ -102,11 +123,13 @@ Sent when the session is ending.
 
 ## Stages
 - `initial_response`: First response from the AI
+- `tool_call`: When AI decides to use a tool
 - `tool_result`: Result from a tool execution
 - `final_response`: Final response after tool usage
 - `tool_exec`: During tool execution
 - `tool_args`: During tool argument processing
 - `tool_missing`: When requested tool is not available
+- `initial_call`: During initial LLM call
 
 ## Implementation Notes
 1. All messages are sent as JSON strings
@@ -114,10 +137,19 @@ Sent when the session is ending.
 3. Error handling should be implemented for all error statuses
 4. Messages may contain additional fields based on the specific context
 5. The content field may contain markdown formatting for rich text display
+6. Tool execution includes timing information for performance monitoring
+7. Tool calls may include both arguments and optional content
 
 ## Example Flow
 1. Client connects → Receives welcome message
 2. Client sends message → Receives initial response
-3. If tools are used → Receives tool results
+3. If tools are used:
+   - Receives tool call message with arguments
+   - Receives tool result with execution details
 4. Finally → Receives final response
-5. On exit → Receives goodbye message 
+5. On exit → Receives goodbye message
+
+## Performance Monitoring
+The system includes execution timing information for tool calls:
+- `execution_time_ms`: Time taken to execute the tool in milliseconds
+- `execution_info`: Detailed information about the tool execution 
