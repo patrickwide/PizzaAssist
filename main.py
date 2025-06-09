@@ -23,7 +23,7 @@ logger = setup_logger(__name__)
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description="Start the Pizza AI Assistant WebSocket server.")
-    parser.add_argument("--host", default="127.0.0.1", help="Host address (default: 127.0.0.1)")
+    parser.add_argument("--host", default="0.0.0.0", help="Host address (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8000, help="Port to run the server on (default: 8000)")
     parser.add_argument("--log-level", default="info", choices=["debug", "info", "warning", "error"], help="Logging level")
     return parser.parse_args()

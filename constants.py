@@ -1,6 +1,11 @@
 # --- Standard Library ---
 import os
 
+# --- Model Configuration ---
+OLLAMA_MODEL = "llama3.2"  # Specify your desired Ollama model
+EMBEDDING_MODEL = "mxbai-embed-large"  # Specify your desired embedding model
+VISION_MODEL = "llama3.2-vision"  # Dedicated vision model
+
 # --- Base Directory ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -17,10 +22,6 @@ CSV_FILE_PATH = os.path.join(REVIEWS_DIR, "realistic_restaurant_reviews.csv")  #
 ORDER_FILE_PATH = os.path.join(REVIEWS_DIR, "orders.txt")  # File to save orders
 STORE_METADATA_FILE = os.path.join(DB_DIR, "store_metadata.json")  # Vector store metadata file in db directory
 
-# --- Model Configuration ---
-OLLAMA_MODEL = "llama3.2"  # Specify your desired Ollama model
-EMBEDDING_MODEL = "mxbai-embed-large"  # Specify your desired embedding model
-VISION_MODEL = "llama3.2-vision"  # Dedicated vision model
 
 # --- Application Configuration ---
 COLLECTION_NAME = "restaurant_reviews"  # Collection name for Chroma DB

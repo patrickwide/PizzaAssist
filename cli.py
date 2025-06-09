@@ -24,7 +24,7 @@ from core.tools.query_memory import query_memory, set_memory_retriever  # New me
 from core.vector_store import vector_store
 from core.memory import ChatHistoryManager
 from core.agent import run_agent
-from core.utils import print_tool_definitions
+from core.utils import log_available_tools
 
 from langchain_core.vectorstores import VectorStoreRetriever
 from typing import Optional, Tuple
@@ -45,7 +45,7 @@ async def main():
     
     try:
         # display tool definitions
-        print_tool_definitions()
+        log_available_tools()
         
         # Initialize memory
         memory = ChatHistoryManager(

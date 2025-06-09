@@ -8,7 +8,8 @@ from pydantic import BaseModel
 from typing import Dict, Any
 
 from .initialization import get_app_state, is_app_ready
-from constants import OLLAMA_MODEL, SYSTEM_MESSAGE
+from .websocket import ws_manager
+from constants import OLLAMA_MODEL
 from logging_config import setup_logger
 
 logger = setup_logger(__name__)
@@ -22,13 +23,8 @@ class HealthResponse(BaseModel):
     message: str
     components: Dict[str, Any]
     ready: bool
+    sessions: Dict[str, Any]
 
-class StatusResponse(BaseModel):
-    """Status response model"""
-    application: str
-    version: str
-    model: str
-    components: Dict[str, Any]
 
 @api_router.get("/health", response_model=HealthResponse)
 async def health_check():
@@ -57,6 +53,14 @@ async def health_check():
             }
         }
         
+        # Get session information
+        active_sessions = len(ws_manager.active_connections)
+        session_info = {
+            "active_sessions": active_sessions,
+            "session_ids": list(ws_manager.active_connections.keys()),
+            "authenticated_users": list(ws_manager.session_to_user.values())
+        }
+        
         overall_status = "healthy" if is_ready else "degraded"
         message = "All systems operational" if is_ready else "Some components have issues"
         
@@ -64,134 +68,10 @@ async def health_check():
             status=overall_status,
             message=message,
             components=components,
-            ready=is_ready
+            ready=is_ready,
+            sessions=session_info
         )
         
     except Exception as e:
         logger.error(f"❌ Health check failed: {e}")
         raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
-
-@api_router.get("/status", response_model=StatusResponse)
-async def get_status():
-    """
-    Get detailed application status
-    Returns comprehensive information about the application state
-    """
-    try:
-        app_state = get_app_state()
-        
-        components = {
-            "memory": {
-                "initialized": app_state.memory is not None,
-                "max_history": getattr(app_state.memory, 'max_history', None) if app_state.memory else None,
-                "history_file": getattr(app_state.memory, 'history_file', None) if app_state.memory else None
-            },
-            "vector_store": {
-                "initialized": app_state.document_retriever is not None,
-                "vector_store_type": type(getattr(app_state.document_retriever, 'vectorstore', None)).__name__ if app_state.document_retriever else None,
-                "search_kwargs": getattr(app_state.document_retriever, 'search_kwargs', None) if app_state.document_retriever else None,
-                "tags": getattr(app_state.document_retriever, 'tags', None) if app_state.document_retriever else None
-            },
-            "initialization": {
-                "completed": app_state.initialized,
-                "overall_ready": is_app_ready()
-            }
-        }
-        
-        return StatusResponse(
-            application="Pizza AI Assistant",
-            version="1.0.0",
-            model=OLLAMA_MODEL,
-            components=components
-        )
-        
-    except Exception as e:
-        logger.error(f"❌ Status check failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Status check failed: {str(e)}")
-
-@api_router.get("/info")
-async def get_info():
-    """
-    Get basic application information
-    """
-    return {
-        "name": "Pizza AI Assistant",
-        "description": "AI-powered pizza restaurant assistant with WebSocket support",
-        "version": "1.0.0",
-        "endpoints": {
-            "websocket": {
-                "chat": "/ws/ai",
-                "status": "/ws/status"
-            },
-            "http": {
-                "health": "/api/v1/health",
-                "status": "/api/v1/status",
-                "info": "/api/v1/info"
-            },
-            "documentation": {
-                "swagger": "/docs",
-                "redoc": "/redoc"
-            }
-        },
-        "model": OLLAMA_MODEL,
-        "features": [
-            "Real-time chat via WebSocket",
-            "Document query and retrieval",
-            "Order processing",
-            "Restaurant reviews and recommendations",
-            "Conversation memory"
-        ]
-    }
-
-@api_router.post("/reset")
-async def reset_memory():
-    """
-    Reset conversation memory
-    Clears the conversation history
-    """
-    try:
-        app_state = get_app_state()
-        
-        if app_state.memory is None:
-            raise HTTPException(status_code=503, detail="Memory not initialized")
-        
-        # Reset memory (you might need to implement this method in AgentMemory)
-        if hasattr(app_state.memory, 'clear'):
-            app_state.memory.clear()
-            logger.info("🧠 Conversation memory reset")
-            return {"message": "Conversation memory reset successfully", "status": "success"}
-        else:
-            logger.warning("⚠️ Memory reset method not available")
-            return {"message": "Memory reset not supported", "status": "warning"}
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ Memory reset failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Memory reset failed: {str(e)}")
-
-@api_router.get("/metrics")
-async def get_metrics():
-    """
-    Get basic application metrics
-    """
-    try:
-        app_state = get_app_state()
-        
-        # Basic metrics - you can expand this based on your needs
-        metrics = {
-            "uptime": "Not implemented",  # You can implement uptime tracking
-            "memory_usage": "Not implemented",  # You can implement memory usage tracking
-            "total_conversations": "Not implemented",  # You can track this
-            "components": {
-                "memory_initialized": app_state.memory is not None,
-                "vector_store_initialized": app_state.document_retriever is not None,
-                "app_initialized": app_state.initialized
-            }
-        }
-        
-        return metrics
-        
-    except Exception as e:
-        logger.error(f"❌ Metrics collection failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Metrics collection failed: {str(e)}")

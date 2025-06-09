@@ -10,7 +10,7 @@ from logging_config import setup_logger
 # Initialize logger
 logger = setup_logger(__name__)
 
-def print_tool_definitions() -> List[str]:
+def log_available_tools() -> List[str]:
     """Initialize and log available tool definitions"""
     try:
         logger.info("🔧 Initializing tools...")

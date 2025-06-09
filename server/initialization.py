@@ -20,6 +20,7 @@ from core.vector_store import vector_store
 from core.tools.query_documents import set_documents_retriever
 from core.tools.query_memory import query_memory, set_memory_retriever  # Import memory tool
 from core.config import TOOL_DEFINITIONS, AVAILABLE_FUNCTIONS
+from core.utils import log_available_tools
 from logging_config import setup_logger
 
 logger = setup_logger(__name__)
@@ -103,9 +104,13 @@ async def initialize_memory() -> Optional[ChatHistoryManager]:
     try:
         logger.info("🧠 Initializing conversation memory...")
         
+        # Create history directory if it doesn't exist
+        history_dir = os.path.dirname(CONVERSATION_HISTORY_FILE_PATH)
+        os.makedirs(history_dir, exist_ok=True)
+        
         memory = ChatHistoryManager(
             max_history=15,
-            history_file=CONVERSATION_HISTORY_FILE_PATH
+            history_dir=history_dir  # Now using history_dir instead of history_file
         )
         
         logger.info("✅ ChatHistoryManager initialized successfully")
@@ -117,28 +122,7 @@ async def initialize_memory() -> Optional[ChatHistoryManager]:
 
 async def initialize_tools():
     """Initialize and log available tool definitions"""
-    try:
-        logger.info("🔧 Initializing tools...")
-        
-        if not TOOL_DEFINITIONS:
-            logger.warning("⚠️  No tool definitions available")
-            return
-
-        logger.info(f"📋 Available tools ({len(TOOL_DEFINITIONS)}):")
-        
-        for i, tool in enumerate(TOOL_DEFINITIONS, 1):
-            # Compact one-liner with key info
-            required_params = tool.get('parameters', {}).get('required', [])
-            logger.info(f"  🔨 #{i}: {tool['name']} | Required: {', '.join(required_params)}")
-            
-            # Optional: Show description on separate line for readability
-            if 'description' in tool:
-                logger.info(f"     📝 {tool['description'][:80]}{'...' if len(tool['description']) > 80 else ''}")
-
-        logger.info("🎉 Tools initialization completed")
-
-    except Exception as e:
-        logger.error(f"❌ Tools initialization failed: {e}", exc_info=True)
+    log_available_tools()
 
 def display_initialization_status():
     """Display the status of retriever initialization."""
@@ -186,7 +170,8 @@ async def initialize_app_components():
         app_state.memory = await initialize_memory()
         if app_state.memory is None:
             logger.error("❌ Failed to initialize memory - using fallback")
-            app_state.memory = ChatHistoryManager(max_history=15, history_file=CONVERSATION_HISTORY_FILE_PATH)
+            history_dir = os.path.dirname(CONVERSATION_HISTORY_FILE_PATH)
+            app_state.memory = ChatHistoryManager(max_history=15, history_dir=history_dir)
         
         # Initialize vector stores - now returns tuple
         app_state.document_retriever, app_state.memory_retriever = await initialize_vector_store()
@@ -219,7 +204,8 @@ async def initialize_app_components():
         
         # Ensure we have at least basic memory
         if app_state.memory is None:
-            app_state.memory = ChatHistoryManager(max_history=15, history_file=CONVERSATION_HISTORY_FILE_PATH)
+            history_dir = os.path.dirname(CONVERSATION_HISTORY_FILE_PATH)
+            app_state.memory = ChatHistoryManager(max_history=15, history_dir=history_dir)
 
 def get_app_state() -> AppState:
     """
