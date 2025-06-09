@@ -27,13 +27,13 @@ async def run_agent(model: str, user_input: str, memory: ChatHistoryManager, sys
     Args:
         model (str): The Ollama model to use (e.g., "llama3.2").
         user_input (str): The latest user message/content.
-        memory (AgentMemory): The agent's memory, storing past messages and tool-call history.
-        system_message (Optional[str]): An optional "system" message to prime the assistant.
+        memory (AgentMemory): The agent’s memory, storing past messages and tool-call history.
+        system_message (Optional[str]): An optional “system” message to prime the assistant.
     Yields:
         Dict[str, Any]: A sequence of status updates and content strings for each stage:
-            - initial_response: The LLM's first reply (or error).
+            - initial_response: The LLM’s first reply (or error).
             - tool_result: Results of any tool invocation (or error).
-            - final_response: The LLM's final reply after tool usage (or warning/error).
+            - final_response: The LLM’s final reply after tool usage (or warning/error).
     """
 
     client = ollama.AsyncClient()
@@ -146,10 +146,8 @@ async def run_agent(model: str, user_input: str, memory: ChatHistoryManager, sys
 
         if function_name in AVAILABLE_FUNCTIONS:
             try:
-                start_time = time.time()
                 function_to_call = AVAILABLE_FUNCTIONS[function_name]
                 function_response = function_to_call(**function_args)
-                execution_time = time.time() - start_time
 
                 if isinstance(function_response, dict):
                     function_response = json.dumps(function_response)
@@ -166,10 +164,7 @@ async def run_agent(model: str, user_input: str, memory: ChatHistoryManager, sys
                     "status": "success",
                     "stage": "tool_result",
                     "tool": function_name,
-                    "args": function_args,
                     "response": function_response,
-                    "execution_info": f"Executed {function_name} with args: {json.dumps(function_args, indent=2)}",
-                    "execution_time_ms": round(execution_time * 1000, 2)
                 }
 
             except TypeError as e:

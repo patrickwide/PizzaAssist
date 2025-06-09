@@ -27,7 +27,6 @@ COLLECTION_NAME = "restaurant_reviews"  # Collection name for Chroma DB
 ENABLE_MEMORY = True  # Set to False to disable memory
 # Concise Pizza Restaurant Assistant System Message
 
-
 # --- System Message ---
 SYSTEM_MESSAGE = """
 You are a professional, courteous pizza restaurant assistant. Follow these rules strictly:
