@@ -15,7 +15,8 @@ from logging_config import setup_logger
 # Initialize logger
 logger = setup_logger(__name__)
 
-def tool_place_order(
+
+def place_pizza_order(
     pizza_type: str,
     size: str,
     quantity: Any,  # Accept Any initially, as LLM might send string or int
@@ -44,14 +45,14 @@ def tool_place_order(
         A JSON string confirming the order details placed or an error message.
     """
     logger.debug(f"Order request received - pizza_type: '{pizza_type}', size: '{size}', quantity: '{quantity}' (type: {type(quantity)}), address: '{delivery_address}', "
-          f"name: '{customer_name}', phone: '{phone_number}', crust: '{crust_type}', extras: {extra_toppings}")
+                 f"name: '{customer_name}', phone: '{phone_number}', crust: '{crust_type}', extras: {extra_toppings}")
 
     # --- Convert quantity to integer and validate ---
     quantity_int: Optional[int] = None
     try:
         quantity_int = int(quantity)  # Attempt conversion
         if quantity_int <= 0:
-            raise ValueError("Quantity must be positive.")  # Add check for non-positive numbers
+            raise ValueError("Quantity must be positive.")
     except (ValueError, TypeError) as e:
         error_msg = f"Invalid quantity received: '{quantity}'. Quantity must be a positive whole number. Error: {e}"
         logger.error(f"Validation Error: {error_msg}")
@@ -59,10 +60,9 @@ def tool_place_order(
 
     # --- Use the validated integer quantity_int moving forward ---
     logger.debug(f"Validated order details - pizza_type: '{pizza_type}', size: '{size}', quantity: {quantity_int}, address: '{delivery_address}', "
-          f"name: '{customer_name}', phone: '{phone_number}', crust: '{crust_type}', extras: {extra_toppings}")
+                 f"name: '{customer_name}', phone: '{phone_number}', crust: '{crust_type}', extras: {extra_toppings}")
 
-    # Simplified validation now relies on successful conversion above and checks other fields
-    if not all([pizza_type, size, delivery_address]):  # quantity_int > 0 already checked
+    if not all([pizza_type, size, delivery_address]):
         error_msg = "Missing required order details: pizza_type, size, and delivery_address are mandatory."
         logger.error(f"Validation Error: {error_msg}")
         return json.dumps({"error": error_msg})
@@ -89,9 +89,9 @@ def tool_place_order(
         confirmation_message = {
             "status": "Order Placed Successfully",
             "confirmation": f"OK. Your order for {quantity_int} x {size} {pizza_type} pizza(s) "
-                          f"{('with crust ' + order_details['crust_type']) if order_details['crust_type'] != 'Regular' else ''} "
-                          f"{('and extra ' + ', '.join(order_details['extra_toppings']) + ' ') if order_details['extra_toppings'] else ''}"
-                          f"to be delivered to '{delivery_address}' has been received.",
+                            f"{('with crust ' + order_details['crust_type']) if order_details['crust_type'] != 'Regular' else ''} "
+                            f"{('and extra ' + ', '.join(order_details['extra_toppings']) + ' ') if order_details['extra_toppings'] else ''}"
+                            f"to be delivered to '{delivery_address}' has been received.",
         }
         logger.info(f"Order confirmation: {confirmation_message['confirmation']}")
         return json.dumps(confirmation_message, indent=2)
@@ -103,24 +103,51 @@ def tool_place_order(
         logger.error(f"An unexpected error occurred during order placement: {e}")
         return json.dumps({"error": f"An unexpected error occurred: {str(e)}"})
 
+
 def get_tool_info() -> Dict[str, Any]:
     """Return the tool definition for this module."""
     return {
         "type": "function",
         "function": {
-            "name": "tool_place_order",
+            "name": "place_pizza_order",
             "description": "Places a pizza order with the specified details and saves it. Use this tool ONLY when the user explicitly confirms they want to place an order and has provided AT LEAST the pizza type, size, quantity, and delivery address. Ask clarifying questions first if details are missing. Do not invent details.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "pizza_type": {"type": "string", "description": "The type of pizza (e.g., 'Pepperoni', 'Margherita', 'Vegan Supreme')."},
-                    "size": {"type": "string", "description": "The size of the pizza (e.g., 'Large', 'Medium', 'Small')."},
-                    "quantity": {"type": "integer", "description": "The number of pizzas."},
-                    "delivery_address": {"type": "string", "description": "The full delivery address."},
-                    "customer_name": {"type": "string", "description": "Customer's name (optional). Omit if not provided."},
-                    "phone_number": {"type": "string", "description": "Customer's phone number (optional). Omit if not provided."},
-                    "crust_type": {"type": "string", "description": "Desired crust type (e.g., 'Thin', 'Regular', 'Stuffed'). Defaults to 'Regular' if not specified.", "default": "Regular"},
-                    "extra_toppings": {"type": "array", "items": {"type": "string"}, "description": "List of extra toppings (optional). Provide as an empty list if none."},
+                    "pizza_type": {
+                        "type": "string",
+                        "description": "The type of pizza (e.g., 'Pepperoni', 'Margherita', 'Vegan Supreme')."
+                    },
+                    "size": {
+                        "type": "string",
+                        "description": "The size of the pizza (e.g., 'Large', 'Medium', 'Small')."
+                    },
+                    "quantity": {
+                        "type": "integer",
+                        "description": "The number of pizzas."
+                    },
+                    "delivery_address": {
+                        "type": "string",
+                        "description": "The full delivery address."
+                    },
+                    "customer_name": {
+                        "type": "string",
+                        "description": "Customer's name (optional). Omit if not provided."
+                    },
+                    "phone_number": {
+                        "type": "string",
+                        "description": "Customer's phone number (optional). Omit if not provided."
+                    },
+                    "crust_type": {
+                        "type": "string",
+                        "description": "Desired crust type (e.g., 'Thin', 'Regular', 'Stuffed'). Defaults to 'Regular' if not specified.",
+                        "default": "Regular"
+                    },
+                    "extra_toppings": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of extra toppings (optional). Provide as an empty list if none."
+                    },
                 },
                 "required": ["pizza_type", "size", "quantity", "delivery_address"],
             },

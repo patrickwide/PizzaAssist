@@ -162,7 +162,7 @@ You'll see logs like:
 
 ### Available Tools
 
-* **`tool_place_order`**
+* **`place_pizza_order`**
 
   * Required: `pizza_type`, `size`, `quantity`, `delivery_address`
   * Description: Places a pizza order and saves it
