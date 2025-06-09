@@ -61,6 +61,22 @@ This is an AI-powered assistant for a pizza restaurant that supports:
 
 ---
 
+## 🎮 Test in Google Colab
+
+You can easily test the Pizza Restaurant AI Assistant using Google Colab without any local setup:
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/patrickwide/PizzaAssist/blob/main/main.ipynb)
+
+The notebook provides an interactive environment to:
+- Test the assistant's capabilities
+- Place pizza orders
+- Query documents
+- Experiment with different prompts
+
+Simply click the "Open in Colab" button above to get started!
+
+---
+
 ## 🧠 Run in CLI Mode
 
 This launches the assistant in the terminal with natural language support.
