@@ -31,11 +31,11 @@ for file in "${FILES[@]}"; do
     fi
 done
 
-echo "📝 Creating system_message.md and welcome_message.md..."
+echo "📝 Creating system_message.txt and welcome_message.txt..."
 
 # Create and populate markdown messages
-SYSTEM_MESSAGE_FILE="data/system_message.md"
-WELCOME_MESSAGE_FILE="data/welcome_message.md"
+SYSTEM_MESSAGE_FILE="data/system_message.txt"
+WELCOME_MESSAGE_FILE="data/welcome_message.txt"
 
 if [ ! -f "$SYSTEM_MESSAGE_FILE" ]; then
     cat <<EOF > "$SYSTEM_MESSAGE_FILE"
