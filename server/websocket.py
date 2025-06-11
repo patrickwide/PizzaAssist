@@ -12,8 +12,9 @@ from typing import Dict, Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 
 from core.agent import run_agent
-from constants import OLLAMA_MODEL, SYSTEM_MESSAGE, WELCOME_MESSAGE
-from .initialization import get_app_state, is_app_ready
+from constants import OLLAMA_MODEL, SYSTEM_MESSAGE, WELCOME_MESSAGE, SHARED_MEMORY_ENABLED
+from .initialization import get_app_state, is_app_ready, initialize_vector_store
+from core.tools.query_memory import remove_session_retriever
 from logging_config import setup_logger
 
 logger = setup_logger(__name__)
@@ -155,8 +156,13 @@ class WebSocketManager:
             self.disconnect(session_id)
 
     def disconnect(self, session_id: str):
-        """Remove a WebSocket connection"""
+        """Remove a WebSocket connection and clean up session resources"""
         if session_id in self.active_connections:
+            # Clean up session-specific memory retriever if not in shared mode
+            if not SHARED_MEMORY_ENABLED:
+                remove_session_retriever(session_id)
+                logger.info(f"🧹 Cleaned up memory retriever for session {session_id}")
+            
             del self.active_connections[session_id]
             logger.info(f"🔌 WebSocket disconnected. Session ID: {session_id}")
 
@@ -287,8 +293,16 @@ async def websocket_endpoint(
         # Initialize memory with existing messages if any
         app_state = get_app_state()
         if messages and app_state.memory:
-            for msg in messages:
-                app_state.memory.add_message(session_id, msg)
+            # Use batch loading for efficiency
+            app_state.memory.add_messages_batch(session_id, messages)
+        
+        # Initialize session-specific memory retriever if not in shared mode
+        if not SHARED_MEMORY_ENABLED:
+            _, memory_retriever = await initialize_vector_store(session_id=session_id)
+            if memory_retriever is None:
+                logger.warning(f"⚠️ Failed to initialize memory retriever for session {session_id}")
+            else:
+                logger.info(f"✅ Initialized session-specific memory retriever for session {session_id}")
         
         # Main message loop
         while True:
@@ -318,4 +332,4 @@ async def websocket_endpoint(
         except:
             pass  # Connection might already be closed
     finally:
-        ws_manager.disconnect(session_id)
+        ws_manager.disconnect(session_id)  # This now handles memory retriever cleanup

@@ -47,3 +47,6 @@ core/chrome_langchain_db/
 *.log
 *.tmp
 conversation_history.jsonl
+
+# Safe files
+safe/
