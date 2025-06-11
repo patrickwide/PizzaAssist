@@ -2,6 +2,7 @@
 import json
 import time
 import uuid
+from datetime import datetime
 
 # --- Type Hinting ---
 from typing import Optional
@@ -51,13 +52,26 @@ async def run_agent(
 
     client = ollama.AsyncClient()
 
-    # Only add system message if there are no messages in memory AND a system message is provided
+    # Load existing messages from memory
     recent_messages = memory.get_recent_messages(session_id)
+    
+    # Only add system message if there are no messages AND a system message is provided
     if system_message and len(recent_messages) == 0:
         logger.debug("Adding system message as first message in conversation.")
-        memory.add_message(session_id, {"role": "system", "content": system_message})
+        memory.add_message(session_id, {
+            "role": "system", 
+            "content": system_message,
+            "timestamp": datetime.now().isoformat()
+        })
 
-    memory.add_message(session_id, {"role": "user", "content": user_input})
+    # Add the new user message
+    memory.add_message(session_id, {
+        "role": "user", 
+        "content": user_input,
+        "timestamp": datetime.now().isoformat()
+    })
+    
+    # Get all messages for context
     messages = memory.get_recent_messages(session_id)
     tools = TOOL_DEFINITIONS
 
@@ -77,17 +91,28 @@ async def run_agent(
 
         if not response_dict or "message" not in response_dict:
             logger.error("No message in LLM response.")
-            memory.add_message(session_id, {"role": "system", "content": "No response from LLM."})
+            error_msg = {
+                "role": "system", 
+                "content": "No response from LLM.",
+                "timestamp": datetime.now().isoformat()
+            }
+            memory.add_message(session_id, error_msg)
             yield {"status": "error", "stage": "initial_response", "content": "No response from LLM."}
             return
 
     except Exception as e:
         logger.error(f"Error calling Ollama chat API: {e}")
-        memory.add_message(session_id, {"role": "system", "content": f"Error contacting LLM: {e}"})
+        error_msg = {
+            "role": "system", 
+            "content": f"Error contacting LLM: {e}",
+            "timestamp": datetime.now().isoformat()
+        }
+        memory.add_message(session_id, error_msg)
         yield {"status": "error", "stage": "initial_call", "error": str(e)}
         return
 
     message = response_dict["message"]
+    message["timestamp"] = datetime.now().isoformat()
     memory.add_message(session_id, message)
 
     # Process LLM message response

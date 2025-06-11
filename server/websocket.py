@@ -1,11 +1,13 @@
 """
 WebSocket Handler Module
-Handles WebSocket connections and AI agent communication
+Handles WebSocket connections and AI agent communication with persistent sessions
 """
 
 import asyncio
 import json
 import uuid
+import os
+from datetime import datetime
 from typing import Dict, Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 
@@ -20,95 +22,118 @@ logger = setup_logger(__name__)
 websocket_router = APIRouter()
 
 class WebSocketManager:
-    """Manages WebSocket connections and messaging"""
+    """Manages WebSocket connections and messaging with persistent storage"""
 
     def __init__(self):
         self.active_connections: Dict[str, WebSocket] = {}  # session_id -> WebSocket
-        self.session_to_user: Dict[str, str] = {}  # session_id -> user_id (if authenticated)
-        self.disconnected_sessions: Dict[str, float] = {}  # session_id -> disconnect_timestamp
-        self.session_timeout = 3600  # 1 hour timeout for disconnected sessions
+        self.session_to_user: Dict[str, str] = {}  # session_id -> user_id
+        self.history_dir = "data/history"  # Directory for storing session history
+        
+        # Ensure history directory exists
+        os.makedirs(self.history_dir, exist_ok=True)
 
-    async def connect(self, websocket: WebSocket, session_id: Optional[str] = None) -> str:
+    def _get_session_file(self, session_id: str) -> str:
+        """Get the path to a session's history file"""
+        return os.path.join(self.history_dir, f"{session_id}.jsonl")
+
+    def _load_session_history(self, session_id: str) -> tuple[list, dict]:
+        """Load session history from disk"""
+        history_file = self._get_session_file(session_id)
+        messages = []
+        try:
+            if os.path.exists(history_file):
+                with open(history_file, 'r') as f:
+                    for line in f:
+                        if line.strip():
+                            messages.append(json.loads(line))
+                logger.info(f"📚 Loaded {len(messages)} messages from session {session_id}")
+            stats = self._analyze_session_history(messages)
+            return messages, stats
+        except Exception as e:
+            logger.error(f"❌ Error loading session history for {session_id}: {e}")
+            return [], self._analyze_session_history([])
+
+    def _analyze_session_history(self, messages: list) -> dict:
+        """Analyze session history and return statistics"""
+        if not messages:
+            return {
+                "user_messages": 0,
+                "assistant_messages": 0,
+                "total_messages": 0,
+                "approx_tokens": 0,
+                "last_message_time": None
+            }
+
+        user_msgs = sum(1 for m in messages if m.get("role") == "user")
+        assistant_msgs = sum(1 for m in messages if m.get("role") == "assistant")
+        # Rough token estimation (4 chars ≈ 1 token)
+        total_chars = sum(len(str(m.get("content", ""))) for m in messages)
+        approx_tokens = total_chars // 4
+
+        last_message = messages[-1]
+        last_time = last_message.get("timestamp", None)
+
+        return {
+            "user_messages": user_msgs,
+            "assistant_messages": assistant_msgs,
+            "total_messages": len(messages),
+            "approx_tokens": approx_tokens,
+            "last_message_time": last_time
+        }
+
+    def session_exists(self, session_id: str) -> bool:
+        """Check if a session file exists"""
+        return os.path.exists(self._get_session_file(session_id))
+
+    async def connect(self, websocket: WebSocket, session_id: Optional[str] = None) -> tuple[str, dict, list]:
         """
-        Add a WebSocket connection to the manager and return its session ID
+        Add a WebSocket connection to the manager and return session info
         
         Args:
             websocket: The WebSocket connection
             session_id: Optional session ID to reconnect to
             
         Returns:
-            str: The session ID (either new or restored)
+            tuple[str, dict, list]: Session ID, session statistics, and message history
         """
         new_session = False
         
         if not session_id:
-            # No session ID provided, generate new one
             session_id = str(uuid.uuid4())
             new_session = True
-        elif session_id in self.active_connections:
-            # If session is active, close the old connection and replace it
+            logger.info(f"🆕 Created new session: {session_id}")
+        elif not self.session_exists(session_id):
+            session_id = str(uuid.uuid4())
+            new_session = True
+            logger.info(f"⚠️ Session file not found, creating new session: {session_id}")
+        
+        # Load existing session history if available
+        messages, session_stats = self._load_session_history(session_id)
+        
+        if session_id in self.active_connections:
             try:
                 old_websocket = self.active_connections[session_id]
                 await old_websocket.close(code=1000, reason="Session replaced by new connection")
             except Exception as e:
                 logger.warning(f"Failed to close old websocket for session {session_id}: {e}")
-            logger.info(f"🔄 Replacing active connection for session {session_id}")
-        elif session_id in self.disconnected_sessions:
-            # Restore existing session
-            logger.info(f"🔄 Restoring disconnected session {session_id}")
-            del self.disconnected_sessions[session_id]
-        else:
-            # Unknown session ID, generate new one
-            logger.warning(f"⚠️ Unknown session ID {session_id}, generating new session")
-            session_id = str(uuid.uuid4())
-            new_session = True
         
         self.active_connections[session_id] = websocket
         logger.info(f"🔌 WebSocket connected. Session ID: {session_id}. Total connections: {len(self.active_connections)}")
         
-        if new_session:
-            logger.info(f"🆕 Created new session: {session_id}")
-        
-        return session_id
+        return session_id, session_stats, messages
 
-    def disconnect(self, session_id: str):
-        """
-        Remove a WebSocket connection by session ID and store disconnect timestamp
-        """
-        if session_id in self.active_connections:
-            del self.active_connections[session_id]
-            # Store disconnect timestamp for potential reconnection
-            self.disconnected_sessions[session_id] = asyncio.get_event_loop().time()
-            logger.info(f"🔌 WebSocket disconnected. Session ID: {session_id} stored for potential reconnection.")
+    def save_message(self, session_id: str, message: dict):
+        """Save a message to the session history"""
+        try:
+            # Add timestamp if not present
+            if "timestamp" not in message:
+                message["timestamp"] = datetime.now().isoformat()
             
-            # Clean up old disconnected sessions
-            self._cleanup_old_sessions()
-
-    def _cleanup_old_sessions(self):
-        """Remove sessions that have been disconnected for longer than the timeout"""
-        current_time = asyncio.get_event_loop().time()
-        expired_sessions = [
-            sid for sid, timestamp in self.disconnected_sessions.items()
-            if current_time - timestamp > self.session_timeout
-        ]
-        
-        for sid in expired_sessions:
-            del self.disconnected_sessions[sid]
-            if sid in self.session_to_user:
-                del self.session_to_user[sid]
-            logger.info(f"🧹 Cleaned up expired session: {sid}")
-
-    def is_session_available(self, session_id: str) -> bool:
-        """
-        Check if a session ID is available for reconnection
-        
-        Returns:
-            bool: True if the session can be reconnected to
-        """
-        return (
-            session_id in self.disconnected_sessions and
-            asyncio.get_event_loop().time() - self.disconnected_sessions[session_id] <= self.session_timeout
-        )
+            history_file = self._get_session_file(session_id)
+            with open(history_file, 'a') as f:
+                f.write(json.dumps(message) + '\n')
+        except Exception as e:
+            logger.error(f"❌ Error saving message for session {session_id}: {e}")
 
     async def send_message(self, session_id: str, message: str | dict):
         """Send a message to a specific session"""
@@ -119,6 +144,9 @@ class WebSocketManager:
         websocket = self.active_connections[session_id]
         try:
             if isinstance(message, dict):
+                # Save non-system messages to history
+                if message.get("type") not in ["welcome", "session_info"]:
+                    self.save_message(session_id, message)
                 await websocket.send_text(json.dumps(message))
             else:
                 await websocket.send_text(message)
@@ -126,32 +154,45 @@ class WebSocketManager:
             logger.error(f"❌ Failed to send message to session {session_id}: {e}")
             self.disconnect(session_id)
 
+    def disconnect(self, session_id: str):
+        """Remove a WebSocket connection"""
+        if session_id in self.active_connections:
+            del self.active_connections[session_id]
+            logger.info(f"🔌 WebSocket disconnected. Session ID: {session_id}")
+
     def associate_user(self, session_id: str, user_id: str):
-        """Associate a user ID with a session ID (for authenticated sessions)"""
+        """Associate a user ID with a session ID"""
         self.session_to_user[session_id] = user_id
         logger.info(f"👤 Associated user {user_id} with session {session_id}")
-
-    def get_session_info(self, session_id: str) -> dict:
-        """Get information about a session"""
-        return {
-            "session_id": session_id,
-            "is_active": session_id in self.active_connections,
-            "is_disconnected": session_id in self.disconnected_sessions,
-            "user_id": self.session_to_user.get(session_id),
-            "disconnect_time": self.disconnected_sessions.get(session_id)
-        }
 
 # Global WebSocket manager
 ws_manager = WebSocketManager()
 
-async def send_welcome_message(session_id: str, is_reconnect: bool = False):
-    """Send a single JSON-formatted welcome message"""
+async def send_welcome_message(session_id: str, session_stats: dict, is_existing_session: bool):
+    """Send a welcome message with session statistics"""
+    last_time = session_stats["last_message_time"]
+    last_time_str = f" (last message: {last_time})" if last_time else ""
+    
+    if is_existing_session:
+        welcome_text = f"""Welcome back! 🎉 
+I've loaded your previous conversation with {session_stats['total_messages']} messages.
+We can continue right where we left off{last_time_str}."""
+    else:
+        welcome_text = WELCOME_MESSAGE
+    
     welcome_payload = {
         "status": "success",
         "type": "welcome",
-        "message": "🔄 Welcome back! Session restored." if is_reconnect else WELCOME_MESSAGE,
+        "message": welcome_text,
         "session_id": session_id,
-        "is_reconnect": is_reconnect
+        "session_info": {
+            "user_messages": session_stats["user_messages"],
+            "assistant_messages": session_stats["assistant_messages"],
+            "total_messages": session_stats["total_messages"],
+            "approx_tokens": session_stats["approx_tokens"],
+            "last_message_time": last_time,
+            "is_existing_session": is_existing_session
+        }
     }
     await ws_manager.send_message(session_id, welcome_payload)
 
@@ -234,26 +275,20 @@ async def websocket_endpoint(
 
     # Accept the connection first
     await websocket.accept()
-
-    # Validate session ID and handle reconnection
-    if session_id:
-        if not ws_manager.is_session_available(session_id):
-            await websocket.send_text(json.dumps({
-                "status": "error",
-                "type": "session_error",
-                "message": "❌ Invalid or expired session ID. Starting new session."
-            }))
-            session_id = None  # Will create new session
-        else:
-            logger.info(f"🔄 Valid session ID provided: {session_id}")
     
     try:
-        # Add to connection manager
-        session_id = await ws_manager.connect(websocket, session_id)
-        is_reconnect = session_id in ws_manager.disconnected_sessions
+        # Add to connection manager and get session info
+        session_id, session_stats, messages = await ws_manager.connect(websocket, session_id)
+        is_existing_session = bool(messages)  # True if we have existing messages
         
         # Send welcome message
-        await send_welcome_message(session_id, is_reconnect)
+        await send_welcome_message(session_id, session_stats, is_existing_session)
+        
+        # Initialize memory with existing messages if any
+        app_state = get_app_state()
+        if messages and app_state.memory:
+            for msg in messages:
+                app_state.memory.add_message(session_id, msg)
         
         # Main message loop
         while True:
@@ -283,5 +318,4 @@ async def websocket_endpoint(
         except:
             pass  # Connection might already be closed
     finally:
-        # Store session for potential reconnection
         ws_manager.disconnect(session_id)
