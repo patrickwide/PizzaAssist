@@ -59,6 +59,29 @@ This is an AI-powered assistant for a pizza restaurant that supports:
    pip install -r requirements.txt
    ```
 
+5. **Initialize Data Structure**
+
+   ```bash
+   ./create_data_structure.sh
+   ```
+
+   You should see the following output:
+   ```
+   🔧 Creating base directory structure...
+   ✅ Created directory: data/db
+   ✅ Created directory: data/history
+   ✅ Created directory: data/documents
+   📄 Creating placeholder files in data/documents...
+   ✅ Created file: data/documents/orders.txt
+   ✅ Created file: data/documents/realistic_restaurant_reviews.csv
+   📝 Creating system_message.md and welcome_message.md...
+   ✅ Created: data/system_message.md
+   ✅ Created: data/welcome_message.md
+
+   🎉 Directory and file structure successfully initialized under 'data/'
+   ✅ Setup complete. You can start working with your project.
+   ```
+
 ---
 
 ## 🎮 Test in Google Colab
