@@ -46,13 +46,16 @@ class WebSocketManager:
             session_id = str(uuid.uuid4())
             new_session = True
         elif session_id in self.active_connections:
-            # Session is already active, generate a new one
-            logger.warning(f"⚠️ Session {session_id} is already active, generating new session")
-            session_id = str(uuid.uuid4())
-            new_session = True
+            # If session is active, close the old connection and replace it
+            try:
+                old_websocket = self.active_connections[session_id]
+                await old_websocket.close(code=1000, reason="Session replaced by new connection")
+            except Exception as e:
+                logger.warning(f"Failed to close old websocket for session {session_id}: {e}")
+            logger.info(f"🔄 Replacing active connection for session {session_id}")
         elif session_id in self.disconnected_sessions:
             # Restore existing session
-            logger.info(f"🔄 Restoring session {session_id}")
+            logger.info(f"🔄 Restoring disconnected session {session_id}")
             del self.disconnected_sessions[session_id]
         else:
             # Unknown session ID, generate new one
