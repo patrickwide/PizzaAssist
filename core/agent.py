@@ -113,6 +113,11 @@ async def run_agent(
 
     message = response_dict["message"]
     message["timestamp"] = datetime.now().isoformat()
+    
+    # Ensure message has a role field
+    if "role" not in message:
+        message["role"] = "assistant"
+        
     memory.add_message(session_id, message)
 
     # Process LLM message response
