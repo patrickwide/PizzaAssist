@@ -29,6 +29,8 @@ class WebSocketManager:
         self.active_connections: Dict[str, WebSocket] = {}  # session_id -> WebSocket
         self.session_to_user: Dict[str, str] = {}  # session_id -> user_id
         self.history_dir = "data/history"  # Directory for storing session history
+        self.message_sequences: Dict[str, int] = {}  # session_id -> current sequence number
+        self.active_conversations: Dict[str, str] = {}  # session_id -> current conversation_id
         
         # Ensure history directory exists
         os.makedirs(self.history_dir, exist_ok=True)
@@ -36,6 +38,42 @@ class WebSocketManager:
     def _get_session_file(self, session_id: str) -> str:
         """Get the path to a session's history file"""
         return os.path.join(self.history_dir, f"{session_id}.jsonl")
+
+    def _get_next_sequence(self, session_id: str) -> int:
+        """Get next sequence number for a session"""
+        if session_id not in self.message_sequences:
+            self.message_sequences[session_id] = 0
+        self.message_sequences[session_id] += 1
+        return self.message_sequences[session_id]
+
+    def _enrich_message(self, session_id: str, message: dict, parent_id: Optional[str] = None) -> dict:
+        """Add correlation fields to a message"""
+        message["message_id"] = str(uuid.uuid4())
+        message["timestamp"] = datetime.now().isoformat()
+        message["sequence"] = self._get_next_sequence(session_id)
+        
+        # Set conversation ID if not present
+        if "conversation_id" not in message:
+            if session_id not in self.active_conversations:
+                self.active_conversations[session_id] = str(uuid.uuid4())
+            message["conversation_id"] = self.active_conversations[session_id]
+        
+        # Link messages in a chain
+        if parent_id:
+            message["parent_id"] = parent_id
+        
+        # Track tool execution chain
+        if message.get("stage") == "tool_call":
+            message["tool_call_id"] = str(uuid.uuid4())
+        elif message.get("stage") == "tool_result" and "tool_call_id" not in message:
+            # Try to find the last tool call ID from session history
+            history = self._load_session_history(session_id)[0]
+            for msg in reversed(history):
+                if msg.get("stage") == "tool_call":
+                    message["tool_call_id"] = msg.get("tool_call_id")
+                    break
+        
+        return message
 
     def _load_session_history(self, session_id: str) -> tuple[list, dict]:
         """Load session history from disk"""
@@ -200,7 +238,13 @@ We can continue right where we left off{last_time_str}."""
             "is_existing_session": is_existing_session
         }
     }
-    await ws_manager.send_message(session_id, welcome_payload)
+    
+    # Add correlation fields to welcome message
+    enriched_payload = ws_manager._enrich_message(session_id, welcome_payload)
+    # Start a new conversation
+    ws_manager.active_conversations[session_id] = enriched_payload["conversation_id"]
+    
+    await ws_manager.send_message(session_id, enriched_payload)
 
 async def process_user_message(session_id: str, message: str) -> bool:
     """
@@ -217,16 +261,32 @@ async def process_user_message(session_id: str, message: str) -> bool:
 
     # Check for exit command
     if message.strip().lower() == "exit":
-        await ws_manager.send_message(session_id, {
+        goodbye_msg = {
             "status": "success",
             "type": "goodbye",
             "message": "👋 Session ended. Thanks for using Pizza AI Assistant!",
             "session_id": session_id
-        })
+        }
+        await ws_manager.send_message(session_id, ws_manager._enrich_message(session_id, goodbye_msg))
         return False
 
     try:
         logger.info(f"📝 Processing message for session {session_id}: {message[:100]}{'...' if len(message) > 100 else ''}")
+
+        # Create user message with ID for reference
+        user_msg = {
+            "role": "user",
+            "content": message,
+            "user_input_id": str(uuid.uuid4()),  # Generate ID for this user input
+            "session_id": session_id
+        }
+        user_msg = ws_manager._enrich_message(session_id, user_msg)
+        
+        # Save user message
+        ws_manager.save_message(session_id, user_msg)
+        
+        last_msg_id = user_msg["message_id"]
+        conversation_id = user_msg["conversation_id"]
 
         # Stream response from AI agent
         async for chunk in run_agent(
@@ -238,7 +298,14 @@ async def process_user_message(session_id: str, message: str) -> bool:
         ):
             logger.debug(f"🤖 Received chunk for session {session_id}: {type(chunk)} - {str(chunk)[:100]}...")
 
-            # Always forward the chunk as JSON
+            # Enrich chunk with correlation data
+            if isinstance(chunk, dict):
+                chunk["user_input_id"] = user_msg["user_input_id"]
+                chunk["conversation_id"] = conversation_id
+                chunk = ws_manager._enrich_message(session_id, chunk, parent_id=last_msg_id)
+                last_msg_id = chunk["message_id"]
+
+            # Forward the enriched chunk
             await ws_manager.send_message(session_id, chunk)
 
         logger.info(f"✅ Message processed for session {session_id}.")
@@ -252,7 +319,7 @@ async def process_user_message(session_id: str, message: str) -> bool:
             "message": f"⚠️ Sorry, I encountered an error: {str(e)}",
             "session_id": session_id
         }
-        await ws_manager.send_message(session_id, error_msg)
+        await ws_manager.send_message(session_id, ws_manager._enrich_message(session_id, error_msg))
         return True  # Continue despite error
 
 @websocket_router.websocket("/ws/ai")

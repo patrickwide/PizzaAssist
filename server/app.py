@@ -28,6 +28,7 @@ async def async_lifespan(app: FastAPI):
     # Add any cleanup logic here if needed
     logger.info("✅ FastAPI application shutdown completed")
 
+# 
 def create_app() -> FastAPI:
     """
     Create and configure the FastAPI application

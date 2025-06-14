@@ -17,7 +17,16 @@ All messages are sent as JSON objects with the following base structure:
     "response": string, // Optional: tool response content
     "arguments": object, // Optional: tool call arguments
     "execution_info": string, // Optional: tool execution details
-    "execution_time_ms": number // Optional: tool execution time in milliseconds
+    "execution_time_ms": number, // Optional: tool execution time in milliseconds
+    
+    // New correlation fields
+    "message_id": string,      // Unique identifier for each message
+    "parent_id": string,       // ID of the message this is responding to
+    "conversation_id": string, // ID of the conversation thread
+    "timestamp": string,       // ISO 8601 timestamp of message creation
+    "sequence": number,        // Sequential number in conversation
+    "user_input_id": string,   // ID of original user input that triggered this message
+    "tool_call_id": string    // ID of the tool call this message relates to (if applicable)
 }
 ```
 
@@ -140,6 +149,22 @@ Sent when the session is ending.
 6. Tool execution includes timing information for performance monitoring
 7. Tool calls may include both arguments and optional content
 
+## Message Tracing
+Messages now support full traceability through the following mechanisms:
+
+1. **Message Chain**
+   - `message_id`: Unique identifier for each message
+   - `parent_id`: References the message this is responding to
+   - `conversation_id`: Groups messages in the same conversation thread
+
+2. **Tool Execution Chain**
+   - `user_input_id`: Links back to the original user input
+   - `tool_call_id`: Correlates tool responses with their calls
+
+3. **Temporal Tracking**
+   - `timestamp`: Precise message creation time
+   - `sequence`: Order in conversation flow
+
 ## Example Flow
 1. Client connects → Receives welcome message
 2. Client sends message → Receives initial response
@@ -152,4 +177,4 @@ Sent when the session is ending.
 ## Performance Monitoring
 The system includes execution timing information for tool calls:
 - `execution_time_ms`: Time taken to execute the tool in milliseconds
-- `execution_info`: Detailed information about the tool execution 
+- `execution_info`: Detailed information about the tool execution
