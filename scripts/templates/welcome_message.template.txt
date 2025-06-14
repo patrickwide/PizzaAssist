@@ -1,6 +1,44 @@
-# Welcome Message
+# 🤖 Connected to PizzaBot Pro
 
-Welcome to the project! 🎉  
-The environment has been initialized and you're ready to begin.
+🍕 **Welcome to Tony's Pizza Palace!** *Serving authentic Italian-American pizza since 1987*
 
-Be sure to check out the `data/documents` folder for working files.
+## I can help you with:
+
+* 🔍 **Menu & Reviews** - Get detailed info on our pizzas and customer feedback
+* 💰 **Pricing & Deals** - Current prices and special offers
+* 🚚 **Orders & Delivery** - Place orders and check delivery zones
+* 👤 **Personal Service** - Remember your preferences and order history
+
+
+## 💡 Popular Questions:
+
+### 🍕 Menu & Food Quality
+
+* `What's on the Vegan Supreme pizza?`
+* `How's the crust on your Margherita?`
+* `What are your most popular pizzas?`
+* `Do you have gluten-free options?`
+
+### 💵 Pricing & Deals
+
+* `What's the price for a large Meat Lovers?`
+* `Do you have any current specials?`
+* `What's your family deal?`
+* `Is there a minimum for delivery?`
+
+### 🛒 Ordering
+
+* `I want to order 2 large pepperoni pizzas to 123 Main St`
+* `What's your delivery time to downtown?`
+* `Can I get extra cheese on a medium Hawaiian?`
+* `Do you deliver to my area?`
+
+### ⭐ Reviews & Service
+
+* `How do customers rate your Buffalo Chicken pizza?`
+* `What do people say about your delivery speed?`
+* `Are there any complaints about the veggie options?`
+* `How's your customer service?`
+
+## 🎯 Ready to order or have questions? Just ask!
+
