@@ -206,36 +206,33 @@ async def run_agent(
 
     elif message.get("tool_calls"):
         # Case: Assistant invoked tool(s)
-        for tool_call in message["tool_calls"]:
-            # Generate a unique ID for the tool call since Ollama doesn't provide one
-            generated_tool_call_id = str(uuid.uuid4())
+        logger.info("LLM decided to use tool(s).")
+        tool_calls_to_process = list(message.get("tool_calls", []))
+        
+        for tool_call in tool_calls_to_process:
+            function_info = tool_call.get("function", {})
+            function_name = function_info.get("name")
+            raw_function_args = function_info.get("arguments")
+            # Generate tool_call_id only once and reuse it
+            tool_call_id = str(uuid.uuid4())
             tool_call_msg_id = str(uuid.uuid4())
             
+            # Send initial tool call message
             yield {
                 "status": "success",
                 "stage": "tool_call",
-                "tool": tool_call["function"]["name"],
-                "arguments": tool_call["function"]["arguments"],
+                "tool": function_name,
+                "arguments": raw_function_args,
                 "content": message.get("content", ""),
                 "message_id": tool_call_msg_id,
                 "parent_id": parent_id,
                 "conversation_id": conversation_id,
                 "user_input_id": user_input_id,
-                "tool_call_id": generated_tool_call_id,
+                "tool_call_id": tool_call_id,
                 "sequence": next_sequence(),
                 "timestamp": datetime.now().isoformat(),
                 "session_id": session_id
             }
-
-        logger.info("LLM decided to use tool(s).")
-        tool_calls_to_process = list(message.get("tool_calls", []))
-
-        for tool_call in tool_calls_to_process:
-            function_info = tool_call.get("function", {})
-            function_name = function_info.get("name")
-            raw_function_args = function_info.get("arguments")
-            # Use generated ID instead of trying to access it from the response
-            tool_call_id = str(uuid.uuid4())
 
             if not function_name or raw_function_args is None:
                 logger.error(f"Invalid tool call structure: {tool_call}")
@@ -273,13 +270,13 @@ async def run_agent(
                     err = f"Malformed JSON: {raw_function_args}"
                     logger.error(err)
                     memory.add_message(session_id, {"role": "tool", "tool_call_id": tool_call_id, "name": function_name, "content": json.dumps({"error": err})})
-                    yield {"status": "error", "stage": "tool_args", "tool": function_name, "error": err, "session_id": session_id}
+                    yield {"status": "error", "stage": "tool_args", "tool": function_name, "error": err, "tool_call_id": tool_call_id, "session_id": session_id}
                     continue
             else:
                 err = f"Unexpected type for args: {type(raw_function_args)}"
                 logger.error(err)
                 memory.add_message(session_id, {"role": "tool", "tool_call_id": tool_call_id, "name": function_name, "content": json.dumps({"error": err})})
-                yield {"status": "error", "stage": "tool_args", "tool": function_name, "error": err, "session_id": session_id}
+                yield {"status": "error", "stage": "tool_args", "tool": function_name, "error": err, "tool_call_id": tool_call_id, "session_id": session_id}
                 continue
 
             if function_args is None:
