@@ -1,0 +1,6 @@
+# Welcome Message
+
+Welcome to the project! 🎉  
+The environment has been initialized and you're ready to begin.
+
+Be sure to check out the `data/documents` folder for working files.

@@ -1,0 +1,7 @@
+# System Message
+
+This is an automated system setup script.  
+It prepares the base folder structure and initializes key project files for use.
+
+- Directory: `data/`
+- Created on: Sun Jun 15 01:16:16 AM EAT 2025
