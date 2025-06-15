@@ -40,6 +40,7 @@ class ChatHistoryManager:
         self._conversations: Dict[str, List[Dict[str, Any]]] = {}
         self._system_messages: Dict[str, Dict[str, Any]] = {}
         self._function_call_attempts: Dict[str, Dict[str, int]] = {}
+        self._sequence_counters: Dict[str, int] = {}  # Track sequence per session
         self._is_loading: bool = False  # Flag to track bulk loading state
 
     def _get_history_path(self, session_id: str) -> str:
@@ -54,6 +55,8 @@ class ChatHistoryManager:
             self._conversations[session_id] = []
         if session_id not in self._function_call_attempts:
             self._function_call_attempts[session_id] = {}
+        if session_id not in self._sequence_counters:
+            self._sequence_counters[session_id] = 0
 
     def set_system_message(self, session_id: str, message: Dict[str, Any]) -> None:
         """Set the persistent system message for a specific session."""
@@ -206,14 +209,18 @@ class ChatHistoryManager:
             else non_system_msgs
         )
 
+    def next_sequence(self, session_id: str) -> int:
+        """Get next sequence number for a session."""
+        self._ensure_session(session_id)
+        self._sequence_counters[session_id] += 1
+        return self._sequence_counters[session_id]
+
     def clear_session(self, session_id: str) -> None:
         """Clear all history and data for a specific session."""
-        if session_id in self._conversations:
-            del self._conversations[session_id]
-        if session_id in self._system_messages:
-            del self._system_messages[session_id]
-        if session_id in self._function_call_attempts:
-            del self._function_call_attempts[session_id]
+        self._conversations.pop(session_id, None)
+        self._system_messages.pop(session_id, None)
+        self._function_call_attempts.pop(session_id, None)
+        self._sequence_counters.pop(session_id, None)
         
         # Remove history file if it exists
         if self.history_dir:

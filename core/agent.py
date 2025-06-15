@@ -34,7 +34,20 @@ async def run_agent(
 ):
     """
     Orchestrates a chat session with Ollama, allowing an optional system prompt.
+
+    Args:
+        model (str): The Ollama model to use (e.g., "llama3.2").
+        user_input (str): The latest user message/content.
+        memory (ChatHistoryManager): The agent's memory, storing past messages and tool-call history.
+        session_id (Optional[str]): The session ID for this conversation. If None, a new one is generated.
+        system_message (Optional[str]): An optional "system" message to prime the assistant.
+    Yields:
+        Dict[str, Any]: A sequence of status updates and content strings for each stage:
+            - initial_response: The LLM's first reply (or error).
+            - tool_result: Results of any tool invocation (or error).
+            - final_response: The LLM's final reply after tool usage (or warning/error).
     """
+
     # Generate session ID if not provided
     if session_id is None:
         session_id = str(uuid.uuid4())
@@ -46,13 +59,6 @@ async def run_agent(
     if conversation_id is None:
         conversation_id = str(uuid.uuid4())
 
-    # Track message sequence - moved outside of function definition
-    sequence_counter = 0
-    def next_sequence():
-        nonlocal sequence_counter
-        sequence_counter += 1
-        return sequence_counter
-
     client = ollama.AsyncClient()
 
     # Load existing messages from memory
@@ -62,15 +68,14 @@ async def run_agent(
     if system_message and len(recent_messages) == 0:
         system_msg_id = str(uuid.uuid4())
         logger.debug("Adding system message as first message in conversation.")
-        system_msg = {
+        memory.add_message(session_id, {
             "role": "system", 
             "content": system_message,
             "message_id": system_msg_id,
             "conversation_id": conversation_id,
-            "sequence": next_sequence(),
+            "sequence": memory.next_sequence(session_id),
             "timestamp": datetime.now().isoformat()
-        }
-        memory.add_message(session_id, system_msg)
+        })
         parent_id = system_msg_id
 
     # Add the new user message
@@ -82,7 +87,7 @@ async def run_agent(
         "parent_id": parent_id,
         "conversation_id": conversation_id,
         "user_input_id": user_input_id,
-        "sequence": next_sequence(),
+        "sequence": memory.next_sequence(session_id),
         "timestamp": datetime.now().isoformat()
     }
     memory.add_message(session_id, user_message)
@@ -107,58 +112,54 @@ async def run_agent(
         logger.debug(f"LLM Raw Response: {json.dumps(response_dict, indent=2)}")
 
         if not response_dict or "message" not in response_dict:
-            error_msg = "No message in LLM response"
-            logger.error(error_msg)
-            error_message = {
+            logger.error("No message in LLM response.")
+            error_msg = {
                 "role": "system", 
-                "content": error_msg,
+                "content": "No response from LLM.",
                 "message_id": str(uuid.uuid4()),
                 "parent_id": parent_id,
                 "conversation_id": conversation_id,
                 "user_input_id": user_input_id,
-                "sequence": next_sequence(),
+                "sequence": memory.next_sequence(session_id),
                 "timestamp": datetime.now().isoformat()
             }
-            memory.add_message(session_id, error_message)
+            memory.add_message(session_id, error_msg)
             yield {
-                "status": "error",
-                "stage": "initial_response",
-                "error": error_msg,
+                "status": "error", 
+                "stage": "initial_response", 
+                "content": "No response from LLM.",
                 "message_id": str(uuid.uuid4()),
                 "parent_id": parent_id,
                 "conversation_id": conversation_id,
                 "user_input_id": user_input_id,
-                "sequence": next_sequence(),
-                "timestamp": datetime.now().isoformat(),
-                "session_id": session_id
+                "sequence": memory.next_sequence(session_id),
+                "timestamp": datetime.now().isoformat()
             }
             return
 
     except Exception as e:
         logger.error(f"Error calling Ollama chat API: {e}")
-        error_msg = f"Error contacting LLM: {e}"
-        error_message = {
+        error_msg = {
             "role": "system", 
-            "content": error_msg,
+            "content": f"Error contacting LLM: {e}",
             "message_id": str(uuid.uuid4()),
             "parent_id": parent_id,
             "conversation_id": conversation_id,
             "user_input_id": user_input_id,
-            "sequence": next_sequence(),
+            "sequence": memory.next_sequence(session_id),
             "timestamp": datetime.now().isoformat()
         }
-        memory.add_message(session_id, error_message)
+        memory.add_message(session_id, error_msg)
         yield {
-            "status": "error",
-            "stage": "initial_call",
+            "status": "error", 
+            "stage": "initial_call", 
             "error": str(e),
             "message_id": str(uuid.uuid4()),
             "parent_id": parent_id,
             "conversation_id": conversation_id,
             "user_input_id": user_input_id,
-            "sequence": next_sequence(),
-            "timestamp": datetime.now().isoformat(),
-            "session_id": session_id
+            "sequence": memory.next_sequence(session_id),
+            "timestamp": datetime.now().isoformat()
         }
         return
 
@@ -168,7 +169,7 @@ async def run_agent(
     message["parent_id"] = parent_id
     message["conversation_id"] = conversation_id
     message["user_input_id"] = user_input_id
-    message["sequence"] = next_sequence()
+    message["sequence"] = memory.next_sequence(session_id)
     message["timestamp"] = datetime.now().isoformat()
     parent_id = message["message_id"]
 
@@ -189,7 +190,7 @@ async def run_agent(
             "parent_id": parent_id,
             "conversation_id": conversation_id,
             "user_input_id": user_input_id,
-            "sequence": next_sequence(),
+            "sequence": memory.next_sequence(session_id),
             "timestamp": datetime.now().isoformat(),
             "session_id": session_id
         }
@@ -205,7 +206,26 @@ async def run_agent(
             function_info = tool_call.get("function", {})
             function_name = function_info.get("name")
             raw_function_args = function_info.get("arguments")
+            # Generate tool_call_id only once and reuse it
             tool_call_id = str(uuid.uuid4())
+            tool_call_msg_id = str(uuid.uuid4())
+            
+            # Send initial tool call message
+            yield {
+                "status": "success",
+                "stage": "tool_call",
+                "tool": function_name,
+                "arguments": raw_function_args,
+                "content": message.get("content", ""),
+                "message_id": tool_call_msg_id,
+                "parent_id": parent_id,
+                "conversation_id": conversation_id,
+                "user_input_id": user_input_id,
+                "tool_call_id": tool_call_id,
+                "sequence": memory.next_sequence(session_id),
+                "timestamp": datetime.now().isoformat(),
+                "session_id": session_id
+            }
 
             if not function_name or raw_function_args is None:
                 logger.error(f"Invalid tool call structure: {tool_call}")
@@ -214,8 +234,7 @@ async def run_agent(
                     "role": "tool", 
                     "tool_call_id": tool_call_id,
                     "name": function_name or "unknown",
-                    "content": json.dumps(err_content),
-                    "sequence": next_sequence()
+                    "content": json.dumps(err_content)
                 })
                 yield {
                     "status": "error",
@@ -227,7 +246,7 @@ async def run_agent(
                     "conversation_id": conversation_id,
                     "user_input_id": user_input_id,
                     "tool_call_id": tool_call_id,
-                    "sequence": next_sequence(),
+                    "sequence": memory.next_sequence(session_id),
                     "timestamp": datetime.now().isoformat(),
                     "session_id": session_id
                 }
@@ -243,42 +262,14 @@ async def run_agent(
                 except json.JSONDecodeError as e:
                     err = f"Malformed JSON: {raw_function_args}"
                     logger.error(err)
-                    memory.add_message(session_id, {
-                        "role": "tool", 
-                        "tool_call_id": tool_call_id, 
-                        "name": function_name, 
-                        "content": json.dumps({"error": err}),
-                        "sequence": next_sequence()
-                    })
-                    yield {
-                        "status": "error", 
-                        "stage": "tool_args", 
-                        "tool": function_name, 
-                        "error": err,
-                        "tool_call_id": tool_call_id,
-                        "sequence": next_sequence(),
-                        "session_id": session_id
-                    }
+                    memory.add_message(session_id, {"role": "tool", "tool_call_id": tool_call_id, "name": function_name, "content": json.dumps({"error": err})})
+                    yield {"status": "error", "stage": "tool_args", "tool": function_name, "error": err, "tool_call_id": tool_call_id, "session_id": session_id}
                     continue
             else:
                 err = f"Unexpected type for args: {type(raw_function_args)}"
                 logger.error(err)
-                memory.add_message(session_id, {
-                    "role": "tool", 
-                    "tool_call_id": tool_call_id, 
-                    "name": function_name, 
-                    "content": json.dumps({"error": err}),
-                    "sequence": next_sequence()
-                })
-                yield {
-                    "status": "error", 
-                    "stage": "tool_args", 
-                    "tool": function_name, 
-                    "error": err,
-                    "tool_call_id": tool_call_id,
-                    "sequence": next_sequence(),
-                    "session_id": session_id
-                }
+                memory.add_message(session_id, {"role": "tool", "tool_call_id": tool_call_id, "name": function_name, "content": json.dumps({"error": err})})
+                yield {"status": "error", "stage": "tool_args", "tool": function_name, "error": err, "tool_call_id": tool_call_id, "session_id": session_id}
                 continue
 
             if function_args is None:
@@ -300,7 +291,6 @@ async def run_agent(
                         "tool_call_id": tool_call_id,
                         "name": function_name,
                         "content": function_response,
-                        "sequence": next_sequence()
                     }
                     memory.add_message(session_id, tool_message)
                     logger.info(f"{function_name} executed.")
@@ -314,7 +304,7 @@ async def run_agent(
                         "conversation_id": conversation_id,
                         "user_input_id": user_input_id,
                         "tool_call_id": tool_call_id,
-                        "sequence": next_sequence(),
+                        "sequence": memory.next_sequence(session_id),
                         "timestamp": datetime.now().isoformat(),
                         "session_id": session_id
                     }
@@ -322,7 +312,7 @@ async def run_agent(
                 except TypeError as e:
                     err = f"Argument mismatch: {e}"
                     logger.error(err)
-                    error_msg = {
+                    memory.add_message(session_id, {
                         "role": "tool", 
                         "tool_call_id": tool_call_id,
                         "name": function_name,
@@ -331,10 +321,8 @@ async def run_agent(
                         "parent_id": parent_id,
                         "conversation_id": conversation_id,
                         "user_input_id": user_input_id,
-                        "sequence": next_sequence(),
-                        "timestamp": datetime.now().isoformat()
-                    }
-                    memory.add_message(session_id, error_msg)
+                        "sequence": memory.next_sequence(session_id)
+                    })
                     yield {
                         "status": "error",
                         "stage": "tool_exec",
@@ -345,14 +333,14 @@ async def run_agent(
                         "conversation_id": conversation_id,
                         "user_input_id": user_input_id,
                         "tool_call_id": tool_call_id,
-                        "sequence": next_sequence(),
+                        "sequence": memory.next_sequence(session_id),
                         "timestamp": datetime.now().isoformat(),
                         "session_id": session_id
                     }
                 except Exception as e:
                     err = f"Runtime error: {e}"
                     logger.error(err)
-                    error_msg = {
+                    memory.add_message(session_id, {
                         "role": "tool",
                         "tool_call_id": tool_call_id,
                         "name": function_name,
@@ -361,10 +349,8 @@ async def run_agent(
                         "parent_id": parent_id,
                         "conversation_id": conversation_id,
                         "user_input_id": user_input_id,
-                        "sequence": next_sequence(),
-                        "timestamp": datetime.now().isoformat()
-                    }
-                    memory.add_message(session_id, error_msg)
+                        "sequence": memory.next_sequence(session_id)
+                    })
                     yield {
                         "status": "error",
                         "stage": "tool_exec",
@@ -375,14 +361,14 @@ async def run_agent(
                         "conversation_id": conversation_id,
                         "user_input_id": user_input_id,
                         "tool_call_id": tool_call_id,
-                        "sequence": next_sequence(),
+                        "sequence": memory.next_sequence(session_id),
                         "timestamp": datetime.now().isoformat(),
                         "session_id": session_id
                     }
             else:
                 err = f"Function '{function_name}' not implemented"
                 logger.error(err)
-                error_msg = {
+                memory.add_message(session_id, {
                     "role": "tool",
                     "tool_call_id": tool_call_id,
                     "name": function_name,
@@ -391,10 +377,8 @@ async def run_agent(
                     "parent_id": parent_id,
                     "conversation_id": conversation_id,
                     "user_input_id": user_input_id,
-                    "sequence": next_sequence(),
-                    "timestamp": datetime.now().isoformat()
-                }
-                memory.add_message(session_id, error_msg)
+                    "sequence": memory.next_sequence(session_id)
+                })
                 yield {
                     "status": "error",
                     "stage": "tool_missing",
@@ -405,12 +389,12 @@ async def run_agent(
                     "conversation_id": conversation_id,
                     "user_input_id": user_input_id,
                     "tool_call_id": tool_call_id,
-                    "sequence": next_sequence(),
+                    "sequence": memory.next_sequence(session_id),
                     "timestamp": datetime.now().isoformat(),
                     "session_id": session_id
                 }
 
-    # Final LLM response
+    # --- Final LLM response ---
     logger.info("Sending updated history for final LLM response...")
     try:
         final_response = await client.chat(
@@ -419,6 +403,7 @@ async def run_agent(
             tools=tools,
         )
 
+        # Ensure consistent error handling with correlation IDs
         if not final_response:
             error_msg = "No response received from LLM for final message"
             logger.error(error_msg)
@@ -430,7 +415,7 @@ async def run_agent(
                 "parent_id": parent_id,
                 "conversation_id": conversation_id,
                 "user_input_id": user_input_id,
-                "sequence": next_sequence(),
+                "sequence": memory.next_sequence(session_id),
                 "timestamp": datetime.now().isoformat(),
                 "session_id": session_id
             }
@@ -450,7 +435,7 @@ async def run_agent(
                 "parent_id": parent_id,
                 "conversation_id": conversation_id,
                 "user_input_id": user_input_id,
-                "sequence": next_sequence(),
+                "sequence": memory.next_sequence(session_id),
                 "timestamp": datetime.now().isoformat(),
                 "session_id": session_id
             }
@@ -472,12 +457,12 @@ async def run_agent(
             "parent_id": parent_id,
             "conversation_id": conversation_id,
             "user_input_id": user_input_id,
-            "sequence": next_sequence(),
+            "sequence": memory.next_sequence(session_id),
             "timestamp": datetime.now().isoformat()
         })
 
         content = final_message.get("content")
-        if content:  # Only check for truthiness, allow empty string
+        if content is not None:  # Allow empty string but not None
             memory.add_message(session_id, final_message)
             logger.info("Final response received.")
             yield {
@@ -488,7 +473,7 @@ async def run_agent(
                 "parent_id": parent_id,
                 "conversation_id": conversation_id,
                 "user_input_id": user_input_id,
-                "sequence": next_sequence(),
+                "sequence": memory.next_sequence(session_id),
                 "timestamp": datetime.now().isoformat(),
                 "session_id": session_id
             }
@@ -496,14 +481,14 @@ async def run_agent(
             warning_msg = "Final response missing content"
             logger.warning(warning_msg)
             yield {
-                "status": "warning",
+                "status": "error",
                 "stage": "final_response",
                 "error": warning_msg,
                 "message_id": str(uuid.uuid4()),
                 "parent_id": parent_id,
                 "conversation_id": conversation_id,
                 "user_input_id": user_input_id,
-                "sequence": next_sequence(),
+                "sequence": memory.next_sequence(session_id),
                 "timestamp": datetime.now().isoformat(),
                 "session_id": session_id
             }
@@ -519,7 +504,7 @@ async def run_agent(
             "parent_id": parent_id,
             "conversation_id": conversation_id,
             "user_input_id": user_input_id,
-            "sequence": next_sequence(),
+            "sequence": memory.next_sequence(session_id),
             "timestamp": datetime.now().isoformat()
         }
         memory.add_message(session_id, error_message)
@@ -531,7 +516,7 @@ async def run_agent(
             "parent_id": parent_id,
             "conversation_id": conversation_id,
             "user_input_id": user_input_id,
-            "sequence": next_sequence(),
+            "sequence": memory.next_sequence(session_id),
             "timestamp": datetime.now().isoformat(),
             "session_id": session_id
         }
