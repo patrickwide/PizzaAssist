@@ -16,7 +16,7 @@ logger = setup_logger(__name__)
 # Define lifespan context manager
 async def async_lifespan(app: FastAPI):
     """Initialize and cleanup application components"""
-    # Startup
+    # Startup - tools will be initialized here by initialize_app_components
     logger.info("🚀 FastAPI application starting up...")
     await initialize_app_components()
     logger.info("✅ FastAPI application startup completed")
@@ -28,38 +28,31 @@ async def async_lifespan(app: FastAPI):
     # Add any cleanup logic here if needed
     logger.info("✅ FastAPI application shutdown completed")
 
-# 
+# Create FastAPI application instance
 def create_app() -> FastAPI:
-    """
-    Create and configure the FastAPI application
+    """Create and configure FastAPI application"""
+    logger.info("🏗️  FastAPI application created successfully")
     
-    Returns:
-        FastAPI: Configured FastAPI application instance
-    """
-    
-    # Create FastAPI instance
     app = FastAPI(
         title="Pizza AI Assistant",
-        description="AI-powered pizza restaurant assistant with WebSocket support",
+        description="WebSocket-based AI Assistant for Pizza Orders",
         version="1.0.0",
-        docs_url="/docs",
-        redoc_url="/redoc",
         lifespan=async_lifespan
     )
-    
-    # Add CORS middleware
+
+    # Configure CORS
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Configure for production
+        allow_origins=["*"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     # Include routers
     app.include_router(websocket_router)
     app.include_router(api_router)
-    
+
     # Root endpoint
     @app.get("/")
     async def root():
@@ -75,6 +68,5 @@ def create_app() -> FastAPI:
                 "docs": "/docs"
             }
         }
-    
-    logger.info("🏗️  FastAPI application created successfully")
+
     return app

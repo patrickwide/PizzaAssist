@@ -3,24 +3,29 @@ Application Initialization Module
 Handles startup initialization of vector store, memory, and other components
 """
 
+# --- Standard Library ---
 import os
 import json
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict
 from langchain_core.vectorstores import VectorStoreRetriever
 
 # Core imports
 from core.memory import ChatHistoryManager
+from core.vector_store import vector_store
+from core.interfaces.pizza_assist_tool import PizzaAssistTool
+from core.tools import registry, initialize_tools
+from tools.query_documents import document_tool
+from tools.query_memory import memory_tool
+
 from constants import (
     HISTORY_DIR,
     CSV_FILE_PATH,
     ORDER_FILE_PATH,
     ENABLE_MEMORY,
-    SHARED_MEMORY_ENABLED
+    SHARED_MEMORY_ENABLED,
+    DOCUMENTS_DIR,
+    STORE_METADATA_FILE,
 )
-from core.vector_store import vector_store
-from core.tools.query_documents import set_documents_retriever
-from core.tools.query_memory import query_memory, set_memory_retriever
-from core.config import TOOL_DEFINITIONS, AVAILABLE_FUNCTIONS
 from core.utils import log_available_tools
 from logging_config import setup_logger
 
@@ -33,9 +38,26 @@ class AppState:
     document_retriever: Optional[VectorStoreRetriever] = None
     memory_retriever: Optional[VectorStoreRetriever] = None  # Only used in shared memory mode
     initialized: bool = False
+    tools: Dict[str, PizzaAssistTool] = {}  # Store tool instances here after initialization
 
 # Initialize global state
 app_state = AppState()
+
+def get_tool(name: str) -> Optional[PizzaAssistTool]:
+    """
+    Get a tool by name, initializing tools if needed
+    
+    Args:
+        name: Name of the tool to get
+        
+    Returns:
+        Optional[PizzaAssistTool]: The requested tool or None if not found
+    """
+    if not app_state.tools:
+        # Initialize tools if not already done
+        initialize_tools()
+        app_state.tools = registry.list_tools()
+    return app_state.tools.get(name)
 
 async def initialize_vector_store(session_id: Optional[str] = None) -> Tuple[Optional[VectorStoreRetriever], Optional[VectorStoreRetriever]]:
     """
@@ -64,7 +86,8 @@ async def initialize_vector_store(session_id: Optional[str] = None) -> Tuple[Opt
         if isinstance(retrievers, tuple) and len(retrievers) == 2:
             document_retriever, _ = retrievers
             if document_retriever is not None:
-                set_documents_retriever(document_retriever)
+                # Use the singleton instance directly
+                document_tool.set_retriever(document_retriever)
                 logger.info("✅ Document retriever initialized successfully")
         
         # Initialize memory retriever only if:
@@ -79,7 +102,8 @@ async def initialize_vector_store(session_id: Optional[str] = None) -> Tuple[Opt
             if isinstance(memory_retrievers, tuple) and len(memory_retrievers) == 2:
                 _, memory_retriever = memory_retrievers
                 if memory_retriever is not None:
-                    set_memory_retriever(memory_retriever, session_id)
+                    # Use the singleton instance directly
+                    memory_tool.set_memory_retriever(memory_retriever, session_id)
                     logger.info(f"✅ Memory retriever initialized successfully for {'shared mode' if SHARED_MEMORY_ENABLED else f'session {session_id}'}")
                 
         logger.info("✅ Vector stores initialized successfully")
@@ -113,10 +137,6 @@ async def initialize_memory() -> Optional[ChatHistoryManager]:
     except Exception as e:
         logger.error(f"❌ Memory initialization failed: {e}", exc_info=True)
         return None
-
-async def initialize_tools():
-    """Initialize and log available tool definitions"""
-    log_available_tools()
 
 def display_initialization_status():
     """Display the status of retriever initialization."""
@@ -161,7 +181,7 @@ async def initialize_app_components():
         logger.info("🚀 Starting application initialization...")
         
         # Initialize tools first
-        await initialize_tools()
+        initialize_tools()
         
         # Initialize memory
         app_state.memory = await initialize_memory()
@@ -174,6 +194,9 @@ async def initialize_app_components():
         
         if app_state.document_retriever is None:
             logger.warning("⚠️  Document retriever not available - document queries will be limited")
+        
+        # Store initialized tools in app state
+        app_state.tools = registry.list_tools()
         
         # Mark as initialized
         app_state.initialized = True

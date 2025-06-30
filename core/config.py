@@ -11,13 +11,9 @@ from logging_config import setup_logger
 # Initialize logger
 logger = setup_logger(__name__)
 
-# Import constants and tools
+# Import constants
 from constants import *
-from core.tools import load_tools
 
-try:
-    # Load tools dynamically
-    TOOL_DEFINITIONS, AVAILABLE_FUNCTIONS = load_tools()
-except Exception as e:
-    logger.warning(f"Error loading tools: {e}")
-    TOOL_DEFINITIONS, AVAILABLE_FUNCTIONS = [], {}
+# Initialize empty tool containers - will be populated during app startup
+TOOL_DEFINITIONS = []
+AVAILABLE_FUNCTIONS = {}

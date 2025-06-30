@@ -2,29 +2,61 @@
 import os
 import json
 import hashlib
-from typing import List, Dict, Tuple, Optional
+from typing import Optional, List, Tuple, Dict, Any
 from datetime import datetime
 
 # --- Third-Party Libraries ---
 from langchain_ollama import OllamaEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.vectorstores import VectorStoreRetriever
+from langchain_core.documents import Document
+import chromadb
+from chromadb.config import Settings
 
-# --- Application Config & Constants ---
+# --- Core Imports ---
+from core.doc_utils import parse_files_to_documents, get_memory_documents
+from logging_config import setup_logger
 from constants import (
     DB_LOCATION,
+    HISTORY_DIR,
     EMBEDDING_MODEL,
     COLLECTION_NAME,
-    STORE_METADATA_FILE,
-    HISTORY_DIR,
     SHARED_MEMORY_ENABLED,
+    STORE_METADATA_FILE,
 )
-
-# --- Logging ---
-from logging_config import setup_logger
 
 # Initialize logger
 logger = setup_logger(__name__)
+
+# Keep track of session-specific memory retrievers
+session_retrievers: Dict[str, VectorStoreRetriever] = {}
+
+# Configure Chroma client settings once
+CHROMA_SETTINGS = Settings(
+    anonymized_telemetry=False,
+    allow_reset=True,
+    is_persistent=True
+)
+
+# Initialize a persistent Chroma client
+def get_chroma_client():
+    return chromadb.PersistentClient(
+        path=DB_LOCATION,
+        settings=CHROMA_SETTINGS
+    )
+
+def remove_session_retriever(session_id: str):
+    """Remove a session-specific memory retriever."""
+    if session_id in session_retrievers:
+        try:
+            # Clean up the vector store
+            retriever = session_retrievers[session_id]
+            if hasattr(retriever, 'vectorstore'):
+                retriever.vectorstore.delete_collection()
+            del session_retrievers[session_id]
+            logger.info(f"Cleaned up memory retriever for session {session_id}")
+        except Exception as e:
+            logger.error(f"Error cleaning up memory retriever for session {session_id}: {e}")
 
 def get_files_hash(file_paths: List[str]) -> str:
     """Generate a hash of the file contents and modification times to detect changes."""
@@ -126,7 +158,6 @@ def setup_memory_store(
         # For shared memory, we need at least one file
         if not session_files:
             logger.info("No session history files found for shared memory")
-            # Create empty vector store for shared memory
             return create_empty_memory_store(memory_db_location, embedding_model)
     else:
         # Get only the current session file for isolated memory
@@ -137,7 +168,10 @@ def setup_memory_store(
             else:
                 logger.info(f"Creating new memory store for session {session_id}")
                 # Create empty vector store for new session
-                return create_empty_memory_store(memory_db_location, embedding_model, session_id)
+                retriever = create_empty_memory_store(memory_db_location, embedding_model, session_id)
+                if retriever:
+                    session_retrievers[session_id] = retriever
+                return retriever
         else:
             logger.info("No session ID provided for isolated memory mode")
             return None
@@ -156,12 +190,21 @@ def setup_memory_store(
         try:
             logger.info("Loading existing memory vector store...")
             embeddings = OllamaEmbeddings(model=embedding_model)
+            
+            # Use the shared client
+            chroma_client = get_chroma_client()
+            collection_name = "memory_collection"
+            
             vector_store = Chroma(
-                collection_name="memory_collection",
-                persist_directory=memory_db_location,
+                client=chroma_client,
+                collection_name=collection_name,
                 embedding_function=embeddings
             )
-            return vector_store.as_retriever(search_kwargs={"k": 3})
+            
+            retriever = vector_store.as_retriever(search_kwargs={"k": 3})
+            if not SHARED_MEMORY_ENABLED and session_id:
+                session_retrievers[session_id] = retriever
+            return retriever
         except Exception as e:
             logger.error(f"Error loading existing memory vector store, will recreate: {e}")
             needs_refresh = True
@@ -229,7 +272,8 @@ def setup_memory_store(
             vector_store = Chroma(
                 collection_name="memory_collection",
                 persist_directory=memory_db_location,
-                embedding_function=embeddings
+                embedding_function=embeddings,
+                client_settings=CHROMA_SETTINGS
             )
             
             # Clear existing and add new documents
@@ -238,19 +282,20 @@ def setup_memory_store(
                 vector_store = Chroma(
                     collection_name="memory_collection",
                     persist_directory=memory_db_location,
-                    embedding_function=embeddings
+                    embedding_function=embeddings,
+                    client_settings=CHROMA_SETTINGS
                 )
             except:
                 pass
-            
-            # Convert documents to Langchain Document format
-            from langchain_core.documents import Document
+
+            # Convert documents to LangChain format
             langchain_docs = [Document(**doc) for doc in all_memory_documents]
             
             # Add documents to vector store
-            ids = [f"memory_{i}" for i in range(len(langchain_docs))]
-            vector_store.add_documents(documents=langchain_docs, ids=ids)
-            logger.info(f"Added {len(langchain_docs)} conversation entries to memory store ({mode} mode).")
+            if langchain_docs:
+                ids = [f"memory_{i}" for i in range(len(langchain_docs))]
+                vector_store.add_documents(documents=langchain_docs, ids=ids)
+                logger.info(f"Added {len(langchain_docs)} conversation entries to memory store ({mode} mode).")
             
             # Save metadata about this store
             save_store_metadata(db_location, current_files_hash, "memory")
@@ -268,22 +313,23 @@ def create_empty_memory_store(db_location: str, embedding_model: str, session_id
     try:
         os.makedirs(db_location, exist_ok=True)
         embeddings = OllamaEmbeddings(model=embedding_model)
-        vector_store = Chroma(
-            collection_name="memory_collection",
-            persist_directory=db_location,
-            embedding_function=embeddings
-        )
         
-        # Clear any existing data
+        # Use the shared client
+        chroma_client = get_chroma_client()
+        collection_name = "memory_collection"
+        
+        # Clear any existing collection
         try:
-            vector_store.delete_collection()
-            vector_store = Chroma(
-                collection_name="memory_collection",
-                persist_directory=db_location,
-                embedding_function=embeddings
-            )
+            if collection_name in chroma_client.list_collections():
+                chroma_client.delete_collection(collection_name)
         except:
             pass
+            
+        vector_store = Chroma(
+            client=chroma_client,
+            collection_name=collection_name,
+            embedding_function=embeddings
+        )
         
         retriever = vector_store.as_retriever(search_kwargs={"k": 3})
         mode = "shared" if SHARED_MEMORY_ENABLED else f"session {session_id}"
@@ -294,45 +340,14 @@ def create_empty_memory_store(db_location: str, embedding_model: str, session_id
         logger.error(f"Error creating empty memory store: {e}")
         return None
 
-def vector_store(
-    file_paths: List[str],
-    enable_memory: bool = False,
-    history_dir: str = HISTORY_DIR,
-    db_location: str = DB_LOCATION,
-    embedding_model: str = EMBEDDING_MODEL,
-    collection_name: str = COLLECTION_NAME,
-    force_refresh: bool = False,
-    session_id: Optional[str] = None
-) -> Tuple[Optional[object], Optional[object]]:
-    """
-    Initialize vector store and retriever from files.
-    Returns a tuple of (document_retriever, memory_retriever).
-    """
-    # Initialize required directories
-    initialize_directories()
-
-    # Setup document retriever
-    document_retriever = setup_document_store(
-        file_paths, db_location, embedding_model, collection_name, force_refresh
-    )
-    
-    # Setup memory retriever if enabled
-    memory_retriever = None
-    if enable_memory:
-        memory_retriever = setup_memory_store(
-            history_dir, db_location, embedding_model, force_refresh, session_id
-        )
-    
-    return document_retriever, memory_retriever
-
 def setup_document_store(
     file_paths: List[str],
     db_location: str,
     embedding_model: str,
     collection_name: str,
     force_refresh: bool = False
-):
-    """Setup the main document vector store."""
+) -> Optional[VectorStoreRetriever]:
+    """Setup the document vector store."""
     current_files_hash = get_files_hash(file_paths)
     stored_metadata = load_store_metadata(db_location, "documents")
     
@@ -347,35 +362,34 @@ def setup_document_store(
         try:
             logger.info("Loading existing document vector store...")
             embeddings = OllamaEmbeddings(model=embedding_model)
+            
+            # Use the shared client
+            chroma_client = get_chroma_client()
+            
             vector_store = Chroma(
+                client=chroma_client,
                 collection_name=collection_name,
-                persist_directory=db_location,
                 embedding_function=embeddings
             )
+            
             return vector_store.as_retriever(search_kwargs={"k": 5})
         except Exception as e:
-            logger.error(f"Error loading existing document vector store, will recreate: {e}")
+            logger.error(f"Error loading existing document store, will recreate: {e}")
             needs_refresh = True
-
+    
     if needs_refresh:
-        logger.info(f"Setting up document vector store from files: {file_paths}")
+        logger.info("Setting up document vector store...")
         embeddings = OllamaEmbeddings(model=embedding_model)
-
-        # Parse documents from the provided files
-        from doc_utils import parse_files_to_documents
-        documents = parse_files_to_documents(file_paths)
-
-        # Enhance documents with source information
+        
+        # Parse and enhance documents
         enhanced_documents = []
-        for i, doc in enumerate(documents):
-            # Determine source type based on file path or content
-            source_type = "unknown"
-            source_file = "unknown"
+        for i, doc in enumerate(parse_files_to_documents(file_paths)):
+            # Extract source file from metadata
+            source_file = doc.metadata.get('source', '')
             
-            if hasattr(doc, 'metadata') and doc.metadata:
-                source_file = doc.metadata.get('source', 'unknown')
-                
-                # Determine document type based on file path
+            # Determine document type based on file name or content
+            source_type = "unknown"
+            if source_file:
                 if 'review' in source_file.lower():
                     source_type = "review"
                 elif 'order' in source_file.lower():
@@ -401,23 +415,23 @@ def setup_document_store(
             return None
 
         try:
+            # Use the shared client
+            chroma_client = get_chroma_client()
+            
+            # Clear existing collection if it exists
+            try:
+                if collection_name in chroma_client.list_collections():
+                    chroma_client.delete_collection(collection_name)
+            except:
+                pass
+            
             vector_store = Chroma(
+                client=chroma_client,
                 collection_name=collection_name,
-                persist_directory=db_location,
                 embedding_function=embeddings
             )
             
-            # Clear existing documents and add new ones
-            try:
-                vector_store.delete_collection()
-                vector_store = Chroma(
-                    collection_name=collection_name,
-                    persist_directory=db_location,
-                    embedding_function=embeddings
-                )
-            except:
-                pass  # Collection might not exist
-            
+            # Add documents to vector store
             ids = [f"doc_{i}" for i in range(len(enhanced_documents))]
             vector_store.add_documents(documents=enhanced_documents, ids=ids)
             logger.info(f"Added {len(enhanced_documents)} documents to the document vector store.")
@@ -431,3 +445,64 @@ def setup_document_store(
         except Exception as e:
             logger.error(f"Error setting up document vector store: {e}")
             return None
+
+def vector_store(
+    file_paths: List[str],
+    enable_memory: bool = False,
+    history_dir: str = HISTORY_DIR,
+    db_location: str = DB_LOCATION,
+    embedding_model: str = EMBEDDING_MODEL,
+    collection_name: str = COLLECTION_NAME,
+    force_refresh: bool = False,
+    session_id: Optional[str] = None
+) -> Tuple[Optional[object], Optional[object]]:
+    """
+    Initialize and return vector store retrievers.
+    
+    Args:
+        file_paths: List of files to index in document store
+        enable_memory: Whether to initialize memory store
+        history_dir: Directory containing session history files
+        db_location: Base directory for vector stores
+        embedding_model: Name of the embedding model to use
+        collection_name: Name for the document collection
+        force_refresh: Whether to force rebuild stores
+        session_id: Optional session ID for memory isolation
+        
+    Returns:
+        Tuple of (document_retriever, memory_retriever)
+        Either may be None if disabled or initialization fails
+    """
+    try:
+        initialize_directories()
+        
+        # Setup document store
+        document_retriever = None
+        memory_retriever = None
+        
+        if file_paths:
+            logger.info("Setting up document vector store...")
+            document_retriever = setup_document_store(
+                file_paths=file_paths,
+                db_location=db_location,
+                embedding_model=embedding_model,
+                collection_name=collection_name,
+                force_refresh=force_refresh
+            )
+        
+        # Setup memory store if enabled
+        if enable_memory:
+            logger.info("Setting up memory vector store...")
+            memory_retriever = setup_memory_store(
+                history_dir=history_dir,
+                db_location=db_location,
+                embedding_model=embedding_model,
+                force_refresh=force_refresh,
+                session_id=session_id
+            )
+            
+        return document_retriever, memory_retriever
+        
+    except Exception as e:
+        logger.error(f"Error in vector store setup: {e}")
+        return None, None

@@ -20,8 +20,8 @@ DB_LOCATION = DB_DIR  # Directory for Chroma DB
 CSV_FILE_PATH = os.path.join(DOCUMENTS_DIR, "realistic_restaurant_reviews.csv")  # Reviews file
 ORDER_FILE_PATH = os.path.join(DOCUMENTS_DIR, "orders.txt")  # File to save orders
 STORE_METADATA_FILE = os.path.join(DB_DIR, "store_metadata.json")  # Vector store metadata file in db directory
-SYSTEM_MESSAGE_FILE = os.path.join(DATA_DIR, "system_message.txt")  # System message file
-WELCOME_MESSAGE_FILE = os.path.join(DATA_DIR, "welcome_message.txt")  # Welcome message file
+SYSTEM_MESSAGE_FILE = os.path.join(DATA_DIR, "system_message.md")  # System message file
+WELCOME_MESSAGE_FILE = os.path.join(DATA_DIR, "welcome_message.md")  # Welcome message file
 
 # --- Memory Configuration ---
 ENABLE_MEMORY = True  # Set to False to disable memory completely

@@ -3,19 +3,31 @@ WebSocket Handler Module
 Handles WebSocket connections and AI agent communication with persistent sessions
 """
 
+import os
 import asyncio
 import json
 import uuid
-import os
+from typing import Dict, Any, Optional
 from datetime import datetime
-from typing import Dict, Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 
+from core.memory import ChatHistoryManager
 from core.agent import run_agent
-from constants import OLLAMA_MODEL, SYSTEM_MESSAGE, WELCOME_MESSAGE, SHARED_MEMORY_ENABLED
-from .initialization import get_app_state, is_app_ready, initialize_vector_store
-from core.tools.query_memory import remove_session_retriever
+from core.config import TOOL_DEFINITIONS
+from core.vector_store import remove_session_retriever
 from logging_config import setup_logger
+from constants import (
+    ENABLE_MEMORY,
+    SHARED_MEMORY_ENABLED,
+    OLLAMA_MODEL,
+    SYSTEM_MESSAGE,
+    WELCOME_MESSAGE,
+)
+
+from .initialization import get_memory, get_app_state, initialize_vector_store, is_app_ready
+
+# Import tools from new location
+from tools.query_memory.tool import memory_tool
 
 logger = setup_logger(__name__)
 
@@ -26,6 +38,7 @@ class WebSocketManager:
     """Manages WebSocket connections and messaging with persistent storage"""
 
     def __init__(self):
+        """Initialize the WebSocket manager."""
         self.active_connections: Dict[str, WebSocket] = {}  # session_id -> WebSocket
         self.session_to_user: Dict[str, str] = {}  # session_id -> user_id
         self.history_dir = "data/history"  # Directory for storing session history
@@ -194,15 +207,20 @@ class WebSocketManager:
             self.disconnect(session_id)
 
     def disconnect(self, session_id: str):
-        """Remove a WebSocket connection and clean up session resources"""
+        """Remove a WebSocket connection and clean up resources."""
         if session_id in self.active_connections:
-            # Clean up session-specific memory retriever if not in shared mode
+            # Clean up memory retriever first
             if not SHARED_MEMORY_ENABLED:
+                memory_tool.remove_session_retriever(session_id)
                 remove_session_retriever(session_id)
-                logger.info(f"🧹 Cleaned up memory retriever for session {session_id}")
+                
+            # Clean up connection tracking
+            self.active_connections.pop(session_id, None)
+            self.session_to_user.pop(session_id, None)
+            self.message_sequences.pop(session_id, None)
+            self.active_conversations.pop(session_id, None)
             
-            del self.active_connections[session_id]
-            logger.info(f"🔌 WebSocket disconnected. Session ID: {session_id}")
+            logger.info(f"🔌 WebSocket disconnected. Session ID: {session_id}. Total connections: {len(self.active_connections)}")
 
     def associate_user(self, session_id: str, user_id: str):
         """Associate a user ID with a session ID"""
@@ -327,41 +345,25 @@ async def websocket_endpoint(
     websocket: WebSocket,
     session_id: Optional[str] = Query(None, description="Optional session ID to reconnect to")
 ):
-    """
-    Main WebSocket endpoint for AI chat
-    
-    Args:
-        websocket: The WebSocket connection
-        session_id: Optional session ID to reconnect to an existing session
-    """
-    
-    # Check if app is ready before accepting connection
-    if not is_app_ready():
-        await websocket.accept()
-        await websocket.send_text(json.dumps({
-            "status": "error",
-            "type": "server_error",
-            "message": "❌ Server is not ready. Please try again in a moment."
-        }))
-        await websocket.close()
-        return
-
-    # Accept the connection first
-    await websocket.accept()
+    """WebSocket endpoint for AI chat interactions"""
+    if session_id is None:
+        session_id = str(uuid.uuid4())
+        logger.info(f"🆕 Created new session: {session_id}")
     
     try:
-        # Add to connection manager and get session info
+        await websocket.accept()
         session_id, session_stats, messages = await ws_manager.connect(websocket, session_id)
-        is_existing_session = bool(messages)  # True if we have existing messages
-        
-        # Send welcome message
-        await send_welcome_message(session_id, session_stats, is_existing_session)
+        logger.info(f"🔌 WebSocket connected. Session ID: {session_id}. Total connections: {len(ws_manager.active_connections)}")
         
         # Initialize memory with existing messages if any
         app_state = get_app_state()
         if messages and app_state.memory:
             # Use batch loading for efficiency
             app_state.memory.add_messages_batch(session_id, messages)
+            session_stats = app_state.memory.get_session_stats(session_id)
+        
+        # Send welcome message with session stats
+        await send_welcome_message(session_id, session_stats, bool(messages))
         
         # Initialize session-specific memory retriever if not in shared mode
         if not SHARED_MEMORY_ENABLED:
@@ -374,7 +376,6 @@ async def websocket_endpoint(
         # Main message loop
         while True:
             logger.debug(f"⏳ Waiting for user input (session {session_id})...")
-            
             try:
                 data = await websocket.receive_text()
             except WebSocketDisconnect:
@@ -392,7 +393,7 @@ async def websocket_endpoint(
         try:
             await websocket.send_text(json.dumps({
                 "status": "error",
-                "type": "exception",
+                "type": "exception", 
                 "message": f"⚠️ An unexpected error occurred: {str(e)}",
                 "session_id": session_id
             }))

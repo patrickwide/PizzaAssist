@@ -4,11 +4,11 @@ uvicorn[standard]
 python-multipart
 
 # LangChain core & extensions
-langchain
-langchain-core
-langchain-ollama
-langchain-chroma
-langchain-community
+langchain>=0.1.3
+langchain-core>=0.1.13
+langchain-ollama>=0.0.1
+langchain-chroma>=0.0.5
+langchain-community>=0.0.16
 
 # LLM backend
 ollama
