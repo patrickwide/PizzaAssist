@@ -19,8 +19,18 @@ from logging_config import setup_logger
 from scripts.create_data_structure import (
     create_directories,
     create_files,
-    copy_template_if_missing
 )
+
+# Import constants
+from constants import (
+    DB_DIR,
+    HISTORY_DIR,
+    DOCUMENTS_DIR,
+    # 
+    ORDER_FILE_PATH,
+    CSV_FILE_PATH
+)
+
 
 # Initialize logger
 logger = setup_logger(__name__)
@@ -35,30 +45,23 @@ def parse_args():
 
 def prepare_project_structure():
     """Prepare necessary directories, files, and templates."""
+    # Ensure base directories exist
+    logger.info("Ensuring project directories and files are set up...")
     base_dirs = [
-        "data/db",
-        "data/history",
-        "data/documents",
-        "scripts/templates"
+        DB_DIR,
+        HISTORY_DIR,
+        DOCUMENTS_DIR,
     ]
     create_directories(base_dirs)
 
+
+    # Create necessary files
+    logger.info("Creating necessary files for the project...")
     doc_files = [
-        "data/documents/orders.txt",
-        "data/documents/realistic_restaurant_reviews.csv"
+        ORDER_FILE_PATH,
+        CSV_FILE_PATH
     ]
     create_files(doc_files)
-
-    logger.info("Ensuring system and welcome messages are initialized...")
-    template_dir = Path("scripts/templates")
-    system_template = template_dir / "system_message.template.txt"
-    welcome_template = template_dir / "welcome_message.template.txt"
-
-    system_file = Path("data/system_message.txt")
-    welcome_file = Path("data/welcome_message.txt")
-
-    copy_template_if_missing(system_template, system_file)
-    copy_template_if_missing(welcome_template, welcome_file)
 
     logger.info("✅ Setup complete. Project structure and message templates are ready.")
 

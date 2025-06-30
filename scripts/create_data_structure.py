@@ -27,15 +27,3 @@ def create_files(file_paths):
             logger.info(f"Created file: {file_path}")
         else:
             logger.info(f"File already exists: {file_path}")
-
-def copy_template_if_missing(src, dest):
-    if not dest.exists():
-        try:
-            content = src.read_text(encoding='utf-8')
-            dest.write_text(content, encoding='utf-8')
-            logger.info(f"Created file from template: {dest}")
-        except Exception as e:
-            logger.error(f"Failed to copy template from {src} to {dest}: {e}")
-    else:
-        logger.info(f"File already exists: {dest}")
-
